@@ -113,15 +113,22 @@ describe('parsing NGN answers', () => {
 });
 
 describe('scheduled run', () => {
-  it('does nothing while the market part is switched off', async () => {
+  it('does nothing after an admin switched the market part off', async () => {
     const client = stubClient(normalAnswers());
     const store = memoryStore({ market: { enabled: false } });
     const result = await runMarketUpdate({ client, store, now: WED_10_00, logger: silentLogger() });
     assert.equal(client.calls.length, 0);
     assert.equal(result.reason, 'switched off');
-    const missing = await runMarketUpdate({ client, store: memoryStore({ market: null }), now: WED_10_00, logger: silentLogger() });
-    assert.equal(missing.reason, 'switched off');
-    assert.equal(client.calls.length, 0);
+  });
+
+  it('is on by default when the switch was never set', async () => {
+    for (const market of [null, {}]) {
+      const client = stubClient(normalAnswers());
+      const store = memoryStore({ market, calendar: freshCalendar(WED_10_00) });
+      const result = await runMarketUpdate({ client, store, now: WED_10_00, logger: silentLogger() });
+      assert.equal(result.kind, 'regular');
+      assert.equal(client.calls.length, 2);
+    }
   });
 
   it('a regular run makes exactly 2 calls and stores quotes, indices and the update time', async () => {

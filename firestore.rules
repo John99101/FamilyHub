@@ -5,7 +5,7 @@ rules_version = '2';
 // Data model (see README.md):
 //   config/access                         allow list: { members: [mail], admins: [mail], updatedAt, updatedBy }
 //   config/watchlist                      family watchlist: { symbols: [..max 10], updatedAt, updatedBy }
-//   config/market                         market on/off switch: { enabled, updatedAt, updatedBy }
+//   config/market                         market on/off switch: { enabled, updatedAt, updatedBy } (missing = on)
 //   rooms/{roomId}                        chat room: { name, createdAt }
 //   rooms/{roomId}/messages/{messageId}   message: { uid, name, photo, text, createdAt }
 //   market/{latest|status|calendar}       written only by the Cloud Function (Admin SDK)

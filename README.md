@@ -107,11 +107,13 @@ clearly allow** showing the data to a private family group on the free plan:
   API (they must name NGN Market as the source), and the docs show apps for
   "your users".
 
-Therefore the market part is built and tested, but ships **switched off**
-(`config/market.enabled` is missing, which counts as off). An admin switches it
-on in the app. SETUP.md step 3 contains a ready mail asking NGN Market for a
-written OK. The page always shows "Kurse mit mindestens 15 Minuten Verzögerung
-· Daten: NGN Market".
+The owner decided to ship the market part **switched on**, because the app is
+for the owner's own private use, which fits the "personal" licence. A missing
+`config/market` document counts as on; an admin can switch it off in the app
+(`enabled: false`). Before other people are added to the allow list, the
+question above applies again; SETUP.md step 3 contains a ready mail asking
+NGN Market for a written OK. The page always shows "Kurse mit mindestens 15
+Minuten Verzögerung · Daten: NGN Market".
 
 Also checked as replacements on request: liquid.trade (a trading app without a
 public data API; its terms forbid copying prices and automated access) and

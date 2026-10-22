@@ -202,7 +202,7 @@ export function createSettings(session, { onSignOut, marketData }) {
   function renderMarketAdmin(state) {
     marketCard.hidden = !session.isAdmin;
     if (!session.isAdmin) return;
-    marketSwitch.checked = state.switch?.enabled === true;
+    marketSwitch.checked = state.switch?.enabled !== false; // missing = on
     const s = state.status;
     if (s && typeof s.callsRemaining === 'number') {
       const reset = toDate(s.resetAt);

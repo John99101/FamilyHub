@@ -69,7 +69,7 @@ export function stubClient(answers) {
 
 export function memoryStore(initial = {}) {
   const state = {
-    market: { enabled: true },
+    market: null, // switch never set = on
     watchlist: [],
     status: null,
     calendar: null,

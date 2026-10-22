@@ -111,7 +111,7 @@ export function createMarkets(data) {
 
     const pausedUntil = toDate(status?.pausedUntil);
     let message = '';
-    if (state.loaded.switch && state.switch?.enabled !== true) {
+    if (state.loaded.switch && state.switch?.enabled === false) {
       message = 'Der Kursabruf ist ausgeschaltet. Ein Admin kann ihn in den Einstellungen einschalten.';
     } else if (pausedUntil && pausedUntil > now) {
       message = `Kurse pausiert bis ${formatDateTime(pausedUntil)}`;

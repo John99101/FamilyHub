@@ -124,10 +124,15 @@ only in Secret Manager (step 3).
    Enter. The key now lives only in Google Secret Manager. Never put it into a
    file, git, or a chat.
 
-**Before switching the market part on:** the NGN Market Terms of Service do not
-clearly allow showing their data to other people on the free plan (see
-README.md, section "Terms of Service"). The app ships with the market switch
-**off**. I recommend asking NGN Market first. You can send this mail to
+**The market part is on from the start.** Set the secret before the first
+deploy: from the next US trading slot after the deploy, the server fetches
+prices. You can switch it off in the app at any time (section 7).
+
+**Only if you later add other people to the allow list:** the NGN Market
+Terms license the data for "personal" use and do not clearly allow showing it
+to other people on the free plan (see README.md, section "Terms of Service").
+While you are the only user, that question does not arise. Before giving
+family members access, you can ask NGN Market with this mail to
 support@ngnmarket.com:
 
 > Subject: Free plan: delayed US quotes on a private family website?
@@ -279,12 +284,13 @@ App Check does not apply to.
 
 Anyone not on the list sees only "Kein Zugang".
 
-**Switch the market part on** (after the answer from NGN Market)
+**When prices appear**
 
-In the app (admins only): **Einstellungen** → **Börse** → switch
-**Kurse von NGN Market abrufen** on. From the next trading slot (every 30
-minutes, 09:30 to 16:30 New York time = 15:30 to 22:30 in Germany most of the
-year) prices appear under **Börse**.
+The market part is on by default. After the deploy, prices appear under
+**Börse** at the next trading slot: every 30 minutes, 09:30 to 16:30 New York
+time (15:30 to 22:30 in Germany most of the year), Monday to Friday, except US
+holidays. The switch is in the app (admins only): **Einstellungen** →
+**Börse** → **Kurse von NGN Market abrufen**.
 
 **See how many API calls are used**
 

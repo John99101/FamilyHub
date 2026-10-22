@@ -258,8 +258,9 @@ export function createCallGuard(now) {
 export async function runMarketUpdate({ client, store, now = new Date(), logger = console }) {
   const summary = (kind, reason, extra = {}) => ({ kind, reason, calls: 0, ...extra });
 
+  // On by default: only an explicit "enabled: false" (set by an admin in the app) stops the calls.
   const marketSwitch = await store.getMarketSwitch();
-  if (!marketSwitch || marketSwitch.enabled !== true) {
+  if (marketSwitch && marketSwitch.enabled === false) {
     return summary('skip', 'switched off');
   }
 

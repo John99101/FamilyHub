@@ -1,7 +1,7 @@
 // Firestore storage for the market data (Admin SDK, so security rules do not
 // apply here; the rules only let family members read these documents).
 //
-//   config/market          { enabled }                     on/off switch (admins, in the app)
+//   config/market          { enabled }                     on/off switch (admins, in the app; missing = on)
 //   config/watchlist       { symbols: [..] }               family watchlist (members, in the app)
 //   market/latest          { updatedAt, quotes, indices, extras, quotesUpdatedAt }
 //   market/status          { state, pausedUntil, callsUsed, callsRemaining, resetAt, ... }
