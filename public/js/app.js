@@ -11,7 +11,7 @@ import { createMarketData } from './market-data.js';
 import { createMarkets } from './markets.js';
 import { createRiskPage } from './risk-page.js';
 
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.1.1';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();

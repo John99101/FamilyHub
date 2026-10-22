@@ -308,7 +308,9 @@ App Check does not apply to.
 2. Type the person's Gmail address → **Hinzufügen**.
 3. Send them the link. They click **Mit Google anmelden**.
 4. To give someone admin rights: **Zum Admin machen**. To remove someone:
-   **Entfernen** (they lose access immediately). You cannot remove yourself.
+   **Entfernen** (from then on every new request of theirs is refused; an app
+   they still have open may keep showing what it had already loaded). You
+   cannot remove yourself.
 
 Anyone not on the list sees only "Kein Zugang".
 
@@ -422,6 +424,71 @@ fallback model it picks; that is billed at that model's price.
 
   And revoke the key on https://console.anthropic.com → **Settings** →
   **API keys**.
+
+---
+
+## 8. Extra safety (recommended, about 15 minutes)
+
+The code side is locked down (sign in, allow list, security rules, strict
+browser headers, keys only in Secret Manager). These steps can only be done by
+you in the consoles. Do them in this order.
+
+**a. 2 Step Verification on the Google accounts** (most important)
+
+The app is exactly as safe as the Google accounts on the allow list. Open
+https://myaccount.google.com/signinoptions/twosv and turn it on (a passkey or
+the Google prompt on your phone is best). Ask every admin to do the same, and
+ideally every family member.
+
+**b. Finish App Check** (step 6), and enforce it after a few days of testing.
+
+**c. Remove `localhost` from the sign in domains**
+
+Firebase console → **Build** → **Authentication** → tab **Settings** →
+**Authorized domains** → on the line `localhost` click the delete icon. The
+local test copy uses the emulator and does not need it. Keep
+`familyhub-5355f.firebaseapp.com` and `familyhub-5355f.web.app`.
+
+**d. Let the browser key work only on your website**
+
+1. https://console.cloud.google.com/apis/credentials (your project at the top).
+2. Under **API keys**, open **Browser key (auto created by Firebase)**. Check
+   that the key shown starts like the `apiKey` in `public/js/firebase-config.js`.
+3. **Application restrictions** → **Websites** → **Add** these two:
+   `https://familyhub-5355f.web.app/*` and
+   `https://familyhub-5355f.firebaseapp.com/*`
+4. Leave **API restrictions** as they are. **Save**.
+5. Wait 5 minutes, then sign out and in again on the website and on a phone.
+   If sign in fails, set **Application restrictions** back to **None**.
+
+**e. Protect the database from being deleted by mistake**
+
+https://console.cloud.google.com/firestore/databases → click **(default)** →
+on its details page find **Delete protection** → **Enable**. Free.
+
+**f. Optional: daily backups**
+
+Same page → **Disaster recovery** (or **Backups**) → **Create schedule** →
+**Daily**, keep **7 days**. Costs a few cents at most for a family sized
+database. A backup is restored into a new database, so ask me first if you
+ever need one.
+
+**g. Keys**
+
+- If you ever pasted an NGN or Anthropic key anywhere other than the
+  `firebase functions:secrets:set` prompt (chat, mail, notes), revoke it on the
+  provider's page and set a new one. The NGN key that was pasted into the chat
+  during setup must be revoked.
+- Never put keys into files in this folder; `.gitignore` already blocks the
+  usual key file names.
+
+**h. Look in now and then**
+
+- Firebase console → **Authentication** → **Users** lists everyone who ever
+  signed in, also strangers who tried. Strangers see only "Kein Zugang" and
+  cannot read anything; you may delete them there.
+- The budget alert (step 1) and the Anthropic spend limit (step 3b) warn you
+  about unexpected costs.
 
 ---
 

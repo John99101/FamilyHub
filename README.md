@@ -147,16 +147,41 @@ public data API; its terms forbid copying prices and automated access) and
 Quiver Quantitative (alternative data, paid API, terms forbid making the data
 available to any third party). Neither fits.
 
+### Security at a glance
+
+Checked on 22 October 2026 (code review, `npm audit` with 0 findings in both
+package folders, secret scan of the whole git history with 0 findings).
+
+| Layer | Protection |
+| :- | :- |
+| Sign in | Google only; verified mail; the rules also check the sign in provider |
+| Access | allow list in `config/access`, checked by the rules on every read and write |
+| Data | deny by default; every field of every write checked (`firestore.rules`, 38 tests); market and AI documents written only by the functions |
+| Allow list | only admins change it; entries must be lower case mail addresses without duplicates; an admin cannot remove themselves |
+| Page | no HTML is ever built from data (text is always set as text); profile photos only from `googleusercontent.com` |
+| Browser | strict Content Security Policy and headers (below); service worker stores page files only |
+| Keys | only in Secret Manager, each one given only to the function that needs it; nothing secret in git |
+| Server | no public endpoints at all: both functions only run on a timer; no automatic retries |
+| AI | gets numbers and stock names only, never chat or member data; its answer is shown as plain text |
+| Costs | budget alert, NGN budget guard, Anthropic spend limit |
+| Still to do by the owner | App Check (SETUP step 6) and the console steps in SETUP step 8 (2 Step Verification, key restriction, delete protection) |
+
+Not protected against: someone who controls a family member's Google account,
+or a device that stays signed in. The chat is not end to end encrypted, so
+Google (as the host) could technically read it.
+
 ### Security headers (firebase.json)
 
 Content Security Policy allowing only this site, the pinned Firebase SDK
-(`www.gstatic.com/firebasejs/`), Google sign in (`apis.google.com`,
-`*.firebaseapp.com` frames), Firestore and Auth endpoints, App Check and
-reCAPTCHA, and Google profile photos. Plus `X-Frame-Options: DENY`,
-`X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin`,
-`Cross-Origin-Opener-Policy: same-origin-allow-popups` (needed for the Google
-popup), and a `Permissions-Policy` that turns off camera, microphone and
-location.
+(`www.gstatic.com/firebasejs/`), Google sign in (`apis.google.com`, and
+frames only from this project's sign in domain
+`familyhub-5355f.firebaseapp.com`; change it there if you ever use your own
+domain for sign in), Firestore and Auth endpoints, App Check and reCAPTCHA,
+and Google profile photos. Plus `Strict-Transport-Security` (https only for a
+year), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin`, `Cross-Origin-Opener-Policy:
+same-origin-allow-popups` (needed for the Google popup), and a
+`Permissions-Policy` that turns off camera, microphone and location.
 
 ## Files
 
@@ -207,7 +232,7 @@ deployed function runs on Node.js 22).
 ```
 npm install
 npm --prefix functions install
-npm test               # 5 text checks + 56 function tests + 37 rules tests
+npm test               # 5 text checks + 56 function tests + 38 rules tests
 npm run emulators      # local site on http://127.0.0.1:5000, Emulator UI on :4000
 npm run demo:market    # (second window) made up market data for the local site
 ```

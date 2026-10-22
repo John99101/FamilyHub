@@ -366,6 +366,23 @@ describe('admins', () => {
     }));
   });
 
+  it('allow list entries must be lower case mail addresses, each only once', async () => {
+    const db = dbAs(ADMIN);
+    const save = (members, admins = [ADMIN.email]) => updateDoc(doc(db, 'config', 'access'), {
+      members, admins, updatedAt: serverTimestamp(), updatedBy: ADMIN.email,
+    });
+    await assertSucceeds(save([]));
+    await assertSucceeds(save(['anna@example.com', 'o.brien+fh@mail.example.co.uk', "d'arc@example.fr"]));
+    await assertFails(save(['Anna@Example.com']));
+    await assertFails(save(['anna@example.com', 'anna@example.com']));
+    await assertFails(save(['not a mail']));
+    await assertFails(save(['anna@example']));
+    await assertFails(save(['anna@example.com|ben@example.com']));
+    await assertFails(save([42]));
+    await assertFails(save([], [ADMIN.email, 'Chef2@example.com']));
+    await assertFails(save([], [ADMIN.email, ADMIN.email]));
+  });
+
   it('nobody can delete or recreate the allow list from the app', async () => {
     await assertFails(deleteDoc(doc(dbAs(ADMIN), 'config', 'access')));
   });

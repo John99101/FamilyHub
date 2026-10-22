@@ -8,7 +8,8 @@ import { t, locale, languageChoice, setLanguageChoice } from './i18n.js';
 const THEME_KEY = 'familyhub-theme';
 const MAX_MEMBERS = 100;
 const MAX_ADMINS = 20;
-const MAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Same check as validMailList in firestore.rules (after lower casing).
+const MAIL_PATTERN = /^[a-z0-9._%+'-]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/;
 
 // ---------- appearance (stored on this device only) ----------
 
