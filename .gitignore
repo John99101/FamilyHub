@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+functions/node_modules/
+
+# Secrets: never commit keys, service accounts or env files
+.env
+.env.*
+*.env
+.secret.local
+functions/.secret.local
+functions/.env*
+*service-account*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+*.pem
+*.key
+
+# Firebase local state
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+firestore-debug.log
+ui-debug.log
+database-debug.log
+pubsub-debug.log
+emulator-data/
+.emulator-data/
+
+
+# Logs and OS files
+npm-debug.log*
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors
+.vscode/
+.idea/

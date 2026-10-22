@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="de" data-theme="auto">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FamilyHub</title>
+  <meta name="description" content="Privater Bereich der Familie">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0f766e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FamilyHub">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="/icons/icon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="/css/app.css">
+  <script src="/js/theme-boot.js"></script>
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body>
+  <noscript><p class="screen-center">Bitte JavaScript aktivieren, um FamilyHub zu nutzen.</p></noscript>
+
+  <!-- Loading -->
+  <div id="screen-loading" class="screen-center" aria-busy="true">
+    <div class="spinner" role="progressbar" aria-label="Wird geladen"></div>
+  </div>
+
+  <!-- Sign in -->
+  <div id="screen-signin" class="screen-center" hidden>
+    <img class="brand-mark" src="/icons/icon-192.png" alt="" width="88" height="88">
+    <h1>FamilyHub</h1>
+    <p>Der private Bereich unserer Familie.</p>
+    <button id="btn-signin" class="btn btn-primary" type="button">
+      <svg class="google-mark" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Mit Google anmelden
+    </button>
+    <p id="signin-error" class="form-error" role="alert"></p>
+  </div>
+
+  <!-- No access -->
+  <div id="screen-noaccess" class="screen-center" hidden>
+    <h1>Kein Zugang</h1>
+    <button id="btn-noaccess-signout" class="btn btn-small" type="button">Abmelden</button>
+  </div>
+
+  <!-- App -->
+  <div id="screen-app" class="app" hidden>
+    <header class="topbar">
+      <h1 id="view-title">Chat</h1>
+      <span class="app-name">FamilyHub</span>
+    </header>
+
+    <nav class="tabbar" aria-label="Hauptnavigation">
+      <a class="tab" href="#/chat" data-route="chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg>
+        <span>Chat</span>
+      </a>
+      <a class="tab" href="#/boerse" data-route="boerse">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-7"/></svg>
+        <span>Börse</span>
+      </a>
+      <a class="tab" href="#/einstellungen" data-route="einstellungen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        <span>Einstellungen</span>
+      </a>
+    </nav>
+
+    <main class="main">
+      <!-- Chat -->
+      <section id="view-chat" class="view view-chat" aria-labelledby="view-title" hidden>
+        <div id="chat-scroll" class="chat-scroll">
+          <div class="chat-list">
+            <div id="chat-top" class="chat-top" aria-live="polite"></div>
+            <div id="chat-messages" role="log" aria-label="Nachrichten"></div>
+            <p id="chat-empty" class="chat-empty" hidden>Noch keine Nachrichten. Schreib die erste!</p>
+          </div>
+        </div>
+        <button id="chat-new-pill" class="new-pill" type="button" hidden>Neue Nachrichten</button>
+        <p id="chat-notice" class="chat-notice" hidden></p>
+        <form id="chat-form" class="composer" autocomplete="off">
+          <div class="composer-inner">
+            <label for="chat-input" class="sr-only">Nachricht</label>
+            <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Nachricht schreiben" enterkeyhint="send"></textarea>
+            <button id="chat-send" class="send-btn" type="submit" aria-label="Senden" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+            </button>
+          </div>
+          <p id="chat-counter" class="composer-hint" hidden></p>
+        </form>
+      </section>
+
+      <!-- Markets -->
+      <section id="view-markets" class="view" aria-labelledby="view-title" hidden>
+        <div class="content">
+          <div class="market-head">
+            <p class="market-source">Kurse mit mindestens 15 Minuten Verzögerung · Daten: NGN Market</p>
+            <p id="market-updated" class="market-updated"></p>
+            <p id="market-state" class="market-state" role="status" hidden></p>
+          </div>
+
+          <section class="card" aria-labelledby="h-indices">
+            <h2 id="h-indices">US Indizes</h2>
+            <div id="market-indices" class="index-grid"></div>
+          </section>
+
+          <section class="card" aria-labelledby="h-watch">
+            <div class="card-head">
+              <h2 id="h-watch">Watchlist der Familie</h2>
+              <a class="btn-link" href="#/einstellungen">Bearbeiten</a>
+            </div>
+            <ul id="market-watch" class="quote-list"></ul>
+          </section>
+
+          <section class="card" aria-labelledby="h-top">
+            <h2 id="h-top">Große US Aktien</h2>
+            <label for="market-filter" class="sr-only">Aktie suchen</label>
+            <input id="market-filter" class="search-input" type="search" placeholder="Name oder Symbol suchen" autocomplete="off" spellcheck="false">
+            <ul id="market-top" class="quote-list"></ul>
+            <button id="market-more" class="btn btn-small more-btn" type="button" hidden>Mehr anzeigen</button>
+          </section>
+
+          <p class="footer-note">Nur zur Information. Keine Anlageberatung und keine Empfehlung zum Kaufen oder Verkaufen.</p>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section id="view-settings" class="view" aria-labelledby="view-title" hidden>
+        <div class="content">
+          <section class="card" aria-labelledby="h-account">
+            <h2 id="h-account">Konto</h2>
+            <div class="account">
+              <span id="account-avatar"></span>
+              <div class="account-text">
+                <div id="account-name" class="account-name"></div>
+                <div id="account-mail" class="account-mail"></div>
+              </div>
+            </div>
+            <button id="btn-signout" class="btn btn-small" type="button">Abmelden</button>
+          </section>
+
+          <section class="card" aria-labelledby="h-theme">
+            <h2 id="h-theme">Darstellung</h2>
+            <fieldset class="segmented" id="theme-choice">
+              <legend class="sr-only">Darstellung wählen</legend>
+              <label><input type="radio" name="theme" value="auto"><span>Automatisch</span></label>
+              <label><input type="radio" name="theme" value="light"><span>Hell</span></label>
+              <label><input type="radio" name="theme" value="dark"><span>Dunkel</span></label>
+            </fieldset>
+          </section>
+
+          <section class="card" aria-labelledby="h-watchlist">
+            <h2 id="h-watchlist">Watchlist</h2>
+            <p class="muted small">Gilt für die ganze Familie. Höchstens 10 US Symbole, zum Beispiel AAPL. Neue Symbole erscheinen nach der nächsten Aktualisierung.</p>
+            <ul id="watch-list" class="people"></ul>
+            <form id="watch-form" class="add-row" novalidate>
+              <label for="watch-input" class="sr-only">Symbol hinzufügen</label>
+              <input id="watch-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="Symbol">
+              <button class="btn btn-primary btn-small" type="submit">Hinzufügen</button>
+            </form>
+            <p id="watch-error" class="form-error" role="alert"></p>
+          </section>
+
+          <section id="card-market-admin" class="card" aria-labelledby="h-market-admin" hidden>
+            <h2 id="h-market-admin">Börse</h2>
+            <label class="switch-row">
+              <input id="market-switch" type="checkbox" role="switch">
+              <span>Kurse von NGN Market abrufen</span>
+            </label>
+            <p class="muted small">Eingeschaltet holt der Server an US Handelstagen alle 30 Minuten neue Kurse. Ausgeschaltet macht er keine Abrufe.</p>
+            <p id="market-usage" class="small"></p>
+          </section>
+
+          <section id="card-access" class="card" aria-labelledby="h-access" hidden>
+            <h2 id="h-access">Zugang</h2>
+            <p class="muted small">Nur diese Mailadressen können sich anmelden. Es muss die Mailadresse des Google Kontos sein. Admins dürfen diese Liste ändern und jede Chatnachricht löschen.</p>
+            <ul id="access-list" class="people"></ul>
+            <form id="access-form" class="add-row" novalidate>
+              <label for="access-input" class="sr-only">Mailadresse hinzufügen</label>
+              <input id="access-input" type="email" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="name@gmail.com">
+              <button class="btn btn-primary btn-small" type="submit">Hinzufügen</button>
+            </form>
+            <p id="access-error" class="form-error" role="alert"></p>
+          </section>
+
+          <section class="card" aria-labelledby="h-info">
+            <h2 id="h-info">Hinweise</h2>
+            <p class="small">Chatnachrichten sind nicht Ende zu Ende verschlüsselt.</p>
+            <p class="small muted">Die Nachrichten speichert Google Firebase in Frankfurt.</p>
+          </section>
+
+          <p class="footer-note">FamilyHub · Version <span id="app-version"></span></p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

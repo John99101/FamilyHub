@@ -1,0 +1,22 @@
+{
+  "name": "familyhub",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Private family website: chat, markets page and settings on Firebase.",
+  "type": "module",
+  "scripts": {
+    "test": "npm run test:functions && npm run test:rules",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-familyhub \"node --test tests/rules.test.js\"",
+    "test:functions": "npm --prefix functions test",
+    "emulators": "firebase emulators:exec --only auth,firestore --project demo-familyhub --ui \"node scripts/serve-local.mjs\"",
+    "demo:market": "node functions/scripts/demo-stub-data.mjs",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.1.0"
+  },
+  "engines": {
+    "node": ">=24.12.0"
+  }
+}

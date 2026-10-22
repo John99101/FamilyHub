@@ -1,0 +1,158 @@
+rules_version = '2';
+
+// FamilyHub security rules.
+//
+// Data model (see README.md):
+//   config/access                         allow list: { members: [mail], admins: [mail], updatedAt, updatedBy }
+//   config/watchlist                      family watchlist: { symbols: [..max 10], updatedAt, updatedBy }
+//   config/market                         market on/off switch: { enabled, updatedAt, updatedBy }
+//   rooms/{roomId}                        chat room: { name, createdAt }
+//   rooms/{roomId}/messages/{messageId}   message: { uid, name, photo, text, createdAt }
+//   market/{latest|status|calendar}       written only by the Cloud Function (Admin SDK)
+//   marketHistory/{symbol}                daily closes, written only by the Cloud Function
+//
+// Everything that is not matched below is denied.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+
+    function signedInWithGoogle() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    function myMail() {
+      return request.auth.token.email.lower();
+    }
+
+    function accessList() {
+      return get(/databases/$(database)/documents/config/access).data;
+    }
+
+    // Signed in with Google, verified mail, and the mail is on the allow list.
+    function isMember() {
+      return signedInWithGoogle()
+        && (myMail() in accessList().members || myMail() in accessList().admins);
+    }
+
+    function isAdmin() {
+      return signedInWithGoogle() && myMail() in accessList().admins;
+    }
+
+    // ---------- allow list ----------
+
+    function validAccessUpdate() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['members', 'admins', 'updatedAt', 'updatedBy'])
+        && d.keys().hasAll(['members', 'admins', 'updatedAt', 'updatedBy'])
+        && d.members is list && d.members.size() <= 100
+        && d.admins is list && d.admins.size() >= 1 && d.admins.size() <= 20
+        && d.updatedAt == request.time
+        && d.updatedBy == myMail()
+        // An admin can never remove themselves, so the app always keeps an admin.
+        && myMail() in d.admins;
+    }
+
+    match /config/access {
+      allow read: if isMember();
+      // The document is created once by hand in the Firebase console (see SETUP.md).
+      allow update: if isAdmin() && validAccessUpdate();
+    }
+
+    // ---------- chat ----------
+
+    match /rooms/{roomId} {
+      allow read: if isMember();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'createdAt'])
+        && request.resource.data.keys().hasAll(['name', 'createdAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.createdAt == request.time;
+
+      match /messages/{messageId} {
+        function validNewMessage() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['uid', 'name', 'photo', 'text', 'createdAt'])
+            && d.keys().hasAll(['uid', 'name', 'photo', 'text', 'createdAt'])
+            && d.uid == request.auth.uid
+            && d.createdAt == request.time
+            && d.text is string
+            && d.text.size() >= 1
+            && d.text.size() <= 2000
+            && d.text.trim().size() >= 1
+            // Name and photo must be the ones Google gave this user.
+            && d.name == request.auth.token.get('name', '')
+            && d.photo == request.auth.token.get('picture', '');
+        }
+
+        allow read: if isMember();
+        allow create: if isMember()
+          && exists(/databases/$(database)/documents/rooms/$(roomId))
+          && validNewMessage();
+        allow delete: if isMember()
+          && (resource.data.uid == request.auth.uid || isAdmin());
+        // Messages cannot be edited.
+      }
+    }
+
+    // ---------- markets ----------
+
+    // Up to 10 US ticker symbols: upper case letters, digits, dot or dash,
+    // 1 to 12 characters, no duplicates. Lists cannot be looped in rules, so
+    // the symbols are joined with "|" and checked with one pattern. Splitting
+    // again must give back exactly the same list: that proves every entry is
+    // text and no entry hides a "|" itself.
+    function validWatchlist() {
+      let d = request.resource.data;
+      let joined = d.symbols.join('|');
+      return d.keys().hasOnly(['symbols', 'updatedAt', 'updatedBy'])
+        && d.keys().hasAll(['symbols', 'updatedAt', 'updatedBy'])
+        && d.symbols is list
+        && d.symbols.size() <= 10
+        && d.symbols.toSet().size() == d.symbols.size()
+        && (d.symbols.size() == 0
+          || (joined.matches('^[A-Z0-9][A-Z0-9.-]{0,11}([|][A-Z0-9][A-Z0-9.-]{0,11})*$')
+            && joined.split('[|]') == d.symbols))
+        && d.updatedAt == request.time
+        && d.updatedBy == myMail();
+    }
+
+    match /config/watchlist {
+      allow read: if isMember();
+      allow create, update: if isMember() && validWatchlist();
+    }
+
+    // On/off switch for fetching market data (read by the Cloud Function).
+    match /config/market {
+      allow read: if isMember();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['enabled', 'updatedAt', 'updatedBy'])
+        && request.resource.data.keys().hasAll(['enabled', 'updatedAt', 'updatedBy'])
+        && request.resource.data.enabled is bool
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == myMail();
+    }
+
+    // Market data: members read, only the Cloud Function writes (Admin SDK
+    // ignores these rules), so every write from the app is denied.
+    match /market/{docId} {
+      allow read: if isMember();
+    }
+
+    match /marketHistory/{symbol} {
+      allow read: if isMember();
+    }
+
+    // ---------- everything else ----------
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
