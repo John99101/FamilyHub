@@ -1,7 +1,7 @@
 {
   "name": "familyhub-functions",
   "private": true,
-  "description": "FamilyHub server part: fetches delayed US market data from NGN Market into Firestore.",
+  "description": "FamilyHub server part: delayed US market data from NGN Market, risk figures, and a daily AI summary.",
   "type": "module",
   "main": "index.js",
   "engines": {
@@ -11,6 +11,7 @@
     "test": "node --test \"test/*.test.js\""
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.132.1",
     "firebase-admin": "14.5.0",
     "firebase-functions": "7.4.0"
   }

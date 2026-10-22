@@ -1,6 +1,7 @@
 // Fills the LOCAL Firestore emulator with stub market data by running the
 // real update code (runMarketUpdate + Firestore store) against a fake NGN
-// Market. Made up prices only. It refuses to run without the emulator.
+// Market, and the real summary code (runRiskSummary) against a fake Claude
+// that returns a fixed demo text. Made up data only; no real API is called.
 //
 //   1. npm run emulators          (in the project folder, keep it running)
 //   2. node functions/scripts/demo-stub-data.mjs
@@ -8,6 +9,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { createFirestoreStore } from '../firestore-store.js';
 import { runMarketUpdate, nyParts, parseHolidays } from '../market.js';
+import { runRiskSummary } from '../ai-summary.js';
 import { topTickers, indexItems, tickerItem, meta } from '../test/helpers.js';
 
 process.env.FIRESTORE_EMULATOR_HOST ||= '127.0.0.1:8080';
@@ -41,7 +43,7 @@ function stubClient(dayIndex, quoteTime) {
       }
       return { data: { data: topTickers(quoteTime).map(shift), pagination: {} }, meta: meta({ used: 640, remaining: 2360 }) };
     },
-    usIndices: async () => ({ data: { data: indexItems(quoteTime), count: 4 }, meta: meta({ used: 640, remaining: 2360 }) }),
+    usIndices: async () => ({ data: { data: indexItems(quoteTime).map(shift), count: 4 }, meta: meta({ used: 640, remaining: 2360 }) }),
     usHolidays: async () => ({ data: { holidays: [] }, meta: meta({ used: 640, remaining: 2360 }) }),
   };
 }
@@ -60,6 +62,7 @@ await db.doc('market/calendar').set({
 // 30 past trading days: one run 30 minutes after the close (16:30 New York = 20:30 UTC in summer time).
 const today = new Date();
 let day = 0;
+let lastClose = null;
 for (let back = 45; back >= 1; back -= 1) {
   const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - back, 20, 30));
   const ny = nyParts(d);
@@ -68,7 +71,25 @@ for (let back = 45; back >= 1; back -= 1) {
   const closeTime = new Date(d.getTime() - 30 * 60 * 1000).toISOString();
   await db.doc('market/status').delete(); // no pause carried over between simulated days
   await runMarketUpdate({ client: stubClient(day, closeTime), store, now: d, logger: quiet });
+  lastClose = d;
 }
+
+// The daily summary for the last simulated close, with a fake Claude (fixed demo text).
+const fakeClaude = {
+  beta: { messages: { create: async () => ({
+    model: 'demo (no real AI call)',
+    stop_reason: 'end_turn',
+    usage: { input_tokens: 0, output_tokens: 0 },
+    content: [{ type: 'text', text: JSON.stringify({
+      en: 'DEMO TEXT, not written by an AI. NVIDIA moved the most in this period, with the largest fall from a peak. The watchlist as a whole followed the S&P 500 closely. These figures describe the past only, and the history is still short.',
+      fr: 'TEXTE DE DÉMONSTRATION, non rédigé par une IA. NVIDIA a le plus bougé sur la période, avec la plus forte baisse depuis un plus haut. La liste dans son ensemble a suivi de près le S&P 500. Ces chiffres décrivent uniquement le passé, et l’historique est encore court.',
+    }) }],
+  }) } },
+};
+await db.doc('market/riskSummary').delete();
+const summaryTime = new Date(lastClose.getTime() + 45 * 60 * 1000); // 17:15 New York
+const summary = await runRiskSummary({ anthropic: fakeClaude, store, now: summaryTime, logger: quiet });
+console.log('Demo summary:', summary.kind, summary.reason || '');
 
 // One run right now (if New York is in trading hours), else a run at the last close.
 const now = new Date();

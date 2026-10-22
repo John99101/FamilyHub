@@ -1,8 +1,9 @@
-// Settings: account, light or dark look, the family watchlist, and (admins
-// only) the market switch and the allow list.
+// Settings: account, language, light or dark look, the family watchlist, and
+// (admins only) the market and AI switches and the allow list.
 import { db, doc, setDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from './firebase.js';
 import { $, el, avatar, toast, formatDateTime } from './ui.js';
 import { SYMBOL_PATTERN, WATCHLIST_MAX, findQuote, toDate } from './market-data.js';
+import { t, locale, languageChoice, setLanguageChoice } from './i18n.js';
 
 const THEME_KEY = 'familyhub-theme';
 const MAX_MEMBERS = 100;
@@ -42,8 +43,15 @@ export function createSettings(session, { onSignOut, marketData }) {
   // Account
   const name = session.user.displayName || session.claims.name || '';
   $('account-avatar').replaceChildren(avatar(name, session.user.photoURL || session.claims.picture, true));
-  $('account-name').textContent = name || 'Ohne Namen';
+  $('account-name').textContent = name || t('settings.noName');
   $('account-mail').textContent = session.mail;
+
+  // Language (this device only; the page reloads in the new language)
+  const language = languageChoice();
+  for (const radio of document.querySelectorAll('input[name="language"]')) {
+    radio.checked = radio.value === language;
+    radio.onchange = () => { if (radio.checked) setLanguageChoice(radio.value); };
+  }
 
   // Appearance
   const theme = currentTheme();
@@ -59,7 +67,7 @@ export function createSettings(session, { onSignOut, marketData }) {
     const admins = new Set(session.access.admins || []);
     const members = new Set(session.access.members || []);
     const all = [...new Set([...admins, ...members])];
-    all.sort((a, b) => (admins.has(b) - admins.has(a)) || a.localeCompare(b, 'de'));
+    all.sort((a, b) => (admins.has(b) - admins.has(a)) || a.localeCompare(b, locale));
     return all.map((mail) => ({ mail, admin: admins.has(mail), me: mail === session.mail }));
   }
 
@@ -72,7 +80,7 @@ export function createSettings(session, { onSignOut, marketData }) {
       if (okText) toast(okText);
     } catch (err) {
       console.warn('Saving the allow list failed', err.code);
-      error.textContent = 'Speichern hat nicht geklappt. Bitte erneut versuchen.';
+      error.textContent = t('common.saveFailed');
     } finally {
       busy = false;
     }
@@ -86,30 +94,30 @@ export function createSettings(session, { onSignOut, marketData }) {
       const actions = el('div', { class: 'person-actions' });
       if (p.admin && !p.me) {
         actions.append(el('button', {
-          class: 'btn-link', type: 'button', text: 'Adminrechte entziehen',
-          onclick: () => save({ admins: arrayRemove(p.mail), members: arrayUnion(p.mail) }, 'Adminrechte entzogen'),
+          class: 'btn-link', type: 'button', text: t('settings.revokeAdmin'),
+          onclick: () => save({ admins: arrayRemove(p.mail), members: arrayUnion(p.mail) }, t('settings.adminRevoked')),
         }));
       }
       if (!p.admin) {
         actions.append(el('button', {
-          class: 'btn-link', type: 'button', text: 'Zum Admin machen', disabled: adminCount >= MAX_ADMINS,
-          onclick: () => save({ admins: arrayUnion(p.mail), members: arrayRemove(p.mail) }, 'Neuer Admin gespeichert'),
+          class: 'btn-link', type: 'button', text: t('settings.makeAdmin'), disabled: adminCount >= MAX_ADMINS,
+          onclick: () => save({ admins: arrayUnion(p.mail), members: arrayRemove(p.mail) }, t('settings.adminAdded')),
         }));
       }
       if (!p.me) {
         actions.append(el('button', {
-          class: 'btn-link danger', type: 'button', text: 'Entfernen',
+          class: 'btn-link danger', type: 'button', text: t('common.remove'),
           onclick: () => {
-            if (!confirm(`${p.mail} entfernen? Diese Person kann sich danach nicht mehr anmelden.`)) return;
-            save({ admins: arrayRemove(p.mail), members: arrayRemove(p.mail) }, 'Zugang entfernt');
+            if (!confirm(t('settings.confirmRemove', { mail: p.mail }))) return;
+            save({ admins: arrayRemove(p.mail), members: arrayRemove(p.mail) }, t('settings.removed'));
           },
         }));
       }
       return el('li', { class: 'person' }, [
         el('span', { class: 'person-mail' }, [
           p.mail,
-          p.me ? el('span', { class: 'muted', text: ' (du)' }) : null,
-          p.admin ? el('span', { class: 'badge', text: 'Admin' }) : null,
+          p.me ? el('span', { class: 'muted', text: ` ${t('settings.you')}` }) : null,
+          p.admin ? el('span', { class: 'badge', text: t('settings.adminBadge') }) : null,
         ]),
         actions,
       ]);
@@ -120,10 +128,10 @@ export function createSettings(session, { onSignOut, marketData }) {
     event.preventDefault();
     const mail = input.value.trim().toLowerCase();
     error.textContent = '';
-    if (!MAIL_PATTERN.test(mail)) { error.textContent = 'Bitte eine gültige Mailadresse eingeben.'; return; }
-    if (people().some((p) => p.mail === mail)) { error.textContent = 'Diese Mailadresse ist schon in der Liste.'; return; }
-    if ((session.access.members || []).length >= MAX_MEMBERS) { error.textContent = `Die Liste ist voll (höchstens ${MAX_MEMBERS} Mitglieder).`; return; }
-    save({ members: arrayUnion(mail) }, 'Mailadresse hinzugefügt').then(() => {
+    if (!MAIL_PATTERN.test(mail)) { error.textContent = t('settings.mailInvalid'); return; }
+    if (people().some((p) => p.mail === mail)) { error.textContent = t('settings.mailDuplicate'); return; }
+    if ((session.access.members || []).length >= MAX_MEMBERS) { error.textContent = t('settings.listFull', { max: MAX_MEMBERS }); return; }
+    save({ members: arrayUnion(mail) }, t('settings.mailAdded')).then(() => {
       if (!error.textContent) input.value = '';
     });
   };
@@ -144,7 +152,7 @@ export function createSettings(session, { onSignOut, marketData }) {
       return true;
     } catch (err) {
       console.warn('Saving the watchlist failed', err.code);
-      watchError.textContent = 'Speichern hat nicht geklappt. Bitte erneut versuchen.';
+      watchError.textContent = t('common.saveFailed');
       return false;
     }
   }
@@ -158,12 +166,12 @@ export function createSettings(session, { onSignOut, marketData }) {
           quote?.name ? el('span', { class: 'muted', text: ` ${quote.name}` }) : null,
         ]),
         el('div', { class: 'person-actions' }, [el('button', {
-          class: 'btn-link danger', type: 'button', text: 'Entfernen',
-          onclick: () => saveWatch(arrayRemove(symbol), `${symbol} entfernt`),
+          class: 'btn-link danger', type: 'button', text: t('common.remove'),
+          onclick: () => saveWatch(arrayRemove(symbol), t('settings.symbolRemoved', { symbol })),
         })]),
       ]);
     }));
-    if (!state.watchlist.length) watchList.append(el('li', { class: 'person muted small', text: 'Noch keine Symbole.' }));
+    if (!state.watchlist.length) watchList.append(el('li', { class: 'person muted small', text: t('settings.noSymbols') }));
   }
 
   watchForm.onsubmit = async (event) => {
@@ -171,47 +179,66 @@ export function createSettings(session, { onSignOut, marketData }) {
     const symbol = watchInput.value.trim().toUpperCase();
     const current = marketData.state.watchlist;
     watchError.textContent = '';
-    if (!SYMBOL_PATTERN.test(symbol)) { watchError.textContent = 'Bitte ein gültiges Symbol eingeben, zum Beispiel AAPL oder BRK.B.'; return; }
-    if (current.includes(symbol)) { watchError.textContent = 'Dieses Symbol ist schon in der Watchlist.'; return; }
-    if (current.length >= WATCHLIST_MAX) { watchError.textContent = `Die Watchlist ist voll (höchstens ${WATCHLIST_MAX} Symbole).`; return; }
-    if (await saveWatch(arrayUnion(symbol), `${symbol} hinzugefügt`)) watchInput.value = '';
+    if (!SYMBOL_PATTERN.test(symbol)) { watchError.textContent = t('settings.symbolInvalid'); return; }
+    if (current.includes(symbol)) { watchError.textContent = t('settings.symbolDuplicate'); return; }
+    if (current.length >= WATCHLIST_MAX) { watchError.textContent = t('settings.watchFull', { max: WATCHLIST_MAX }); return; }
+    if (await saveWatch(arrayUnion(symbol), t('settings.symbolAdded', { symbol }))) watchInput.value = '';
   };
 
-  // ---------- market switch and API usage (admins only) ----------
+  // ---------- market and AI switches, API usage (admins only) ----------
 
   const marketCard = $('card-market-admin');
   const marketSwitch = $('market-switch');
+  const aiSwitch = $('ai-switch');
   const usage = $('market-usage');
 
-  marketSwitch.onchange = async () => {
+  // Both switches live in config/market; a missing value counts as on.
+  async function saveSwitches(next, okText, revert) {
+    try {
+      await setDoc(doc(db, 'config', 'market'), { ...next, updatedAt: serverTimestamp(), updatedBy: session.mail });
+      toast(okText);
+    } catch (err) {
+      console.warn('Saving the switches failed', err.code);
+      toast(t('common.saveFailed'));
+      revert();
+    }
+  }
+
+  const currentSwitches = () => ({
+    enabled: marketData.state.switch?.enabled !== false,
+    aiEnabled: marketData.state.switch?.aiEnabled !== false,
+  });
+
+  marketSwitch.onchange = () => {
     const enabled = marketSwitch.checked;
-    if (enabled && !confirm('Kursabruf einschalten? Der Server holt dann an US Handelstagen alle 30 Minuten Kurse von NGN Market.')) {
+    if (enabled && !confirm(t('settings.confirmMarketOn'))) {
       marketSwitch.checked = false;
       return;
     }
-    try {
-      await setDoc(doc(db, 'config', 'market'), { enabled, updatedAt: serverTimestamp(), updatedBy: session.mail });
-      toast(enabled ? 'Kursabruf eingeschaltet' : 'Kursabruf ausgeschaltet');
-    } catch (err) {
-      console.warn('Saving the market switch failed', err.code);
-      toast('Speichern hat nicht geklappt.');
-      marketSwitch.checked = !enabled;
-    }
+    saveSwitches({ ...currentSwitches(), enabled }, t(enabled ? 'settings.marketOn' : 'settings.marketOff'), () => { marketSwitch.checked = !enabled; });
+  };
+
+  aiSwitch.onchange = () => {
+    const aiEnabled = aiSwitch.checked;
+    saveSwitches({ ...currentSwitches(), aiEnabled }, t(aiEnabled ? 'settings.aiOn' : 'settings.aiOff'), () => { aiSwitch.checked = !aiEnabled; });
   };
 
   function renderMarketAdmin(state) {
     marketCard.hidden = !session.isAdmin;
     if (!session.isAdmin) return;
-    marketSwitch.checked = state.switch?.enabled !== false; // missing = on
+    marketSwitch.checked = state.switch?.enabled !== false;
+    aiSwitch.checked = state.switch?.aiEnabled !== false;
     const s = state.status;
     if (s && typeof s.callsRemaining === 'number') {
       const reset = toDate(s.resetAt);
       const lastRun = toDate(s.lastRunAt);
-      usage.textContent = `NGN Abrufe: ${s.callsUsed ?? '?'} verbraucht, ${s.callsRemaining} übrig.`
-        + (reset ? ` Neues Kontingent ab ${formatDateTime(reset)}.` : '')
-        + (lastRun ? ` Letzter Lauf: ${formatDateTime(lastRun)}.` : '');
+      usage.textContent = [
+        t('settings.usage', { used: s.callsUsed ?? '?', remaining: s.callsRemaining }),
+        reset ? t('settings.usageReset', { time: formatDateTime(reset) }) : '',
+        lastRun ? t('settings.usageLastRun', { time: formatDateTime(lastRun) }) : '',
+      ].filter(Boolean).join(' ');
     } else {
-      usage.textContent = 'Noch kein Abruf gelaufen.';
+      usage.textContent = t('settings.usageNone');
     }
   }
 

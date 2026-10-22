@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>FamilyHub</title>
-  <meta name="description" content="Privater Bereich der Familie">
+  <meta name="description" content="FamilyHub">
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#0f766e">
   <meta name="mobile-web-app-capable" content="yes">
@@ -19,29 +19,29 @@
   <script type="module" src="/js/app.js"></script>
 </head>
 <body>
-  <noscript><p class="screen-center">Bitte JavaScript aktivieren, um FamilyHub zu nutzen.</p></noscript>
+  <noscript><p class="screen-center">Bitte JavaScript aktivieren · Please enable JavaScript · Merci d’activer JavaScript</p></noscript>
 
   <!-- Loading -->
   <div id="screen-loading" class="screen-center" aria-busy="true">
-    <div class="spinner" role="progressbar" aria-label="Wird geladen"></div>
+    <div class="spinner" role="progressbar" aria-label="Loading" data-i18n-attr="aria-label:common.loading"></div>
   </div>
 
   <!-- Sign in -->
   <div id="screen-signin" class="screen-center" hidden>
     <img class="brand-mark" src="/icons/icon-192.png" alt="" width="88" height="88">
     <h1>FamilyHub</h1>
-    <p>Der private Bereich unserer Familie.</p>
+    <p data-i18n="signin.tagline">Der private Bereich unserer Familie.</p>
     <button id="btn-signin" class="btn btn-primary" type="button">
       <svg class="google-mark" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-      Mit Google anmelden
+      <span data-i18n="signin.button">Mit Google anmelden</span>
     </button>
     <p id="signin-error" class="form-error" role="alert"></p>
   </div>
 
   <!-- No access -->
   <div id="screen-noaccess" class="screen-center" hidden>
-    <h1>Kein Zugang</h1>
-    <button id="btn-noaccess-signout" class="btn btn-small" type="button">Abmelden</button>
+    <h1 data-i18n="noaccess.title">Kein Zugang</h1>
+    <button id="btn-noaccess-signout" class="btn btn-small" type="button" data-i18n="common.signout">Abmelden</button>
   </div>
 
   <!-- App -->
@@ -51,18 +51,22 @@
       <span class="app-name">FamilyHub</span>
     </header>
 
-    <nav class="tabbar" aria-label="Hauptnavigation">
+    <nav class="tabbar" aria-label="Hauptnavigation" data-i18n-attr="aria-label:nav.label">
       <a class="tab" href="#/chat" data-route="chat">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.9A8 8 0 1 1 21 12z"/></svg>
-        <span>Chat</span>
+        <span data-i18n="nav.chat">Chat</span>
       </a>
       <a class="tab" href="#/boerse" data-route="boerse">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-7"/></svg>
-        <span>Börse</span>
+        <span data-i18n="nav.markets">Börse</span>
+      </a>
+      <a class="tab" href="#/risiko" data-route="risiko">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 18a9 9 0 1 1 17 0"/><path d="m12 14 4.5-5"/><circle cx="12" cy="14" r="1.2"/></svg>
+        <span data-i18n="nav.risk">Risiko</span>
       </a>
       <a class="tab" href="#/einstellungen" data-route="einstellungen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-        <span>Einstellungen</span>
+        <span data-i18n="nav.settings">Einstellungen</span>
       </a>
     </nav>
 
@@ -72,17 +76,17 @@
         <div id="chat-scroll" class="chat-scroll">
           <div class="chat-list">
             <div id="chat-top" class="chat-top" aria-live="polite"></div>
-            <div id="chat-messages" role="log" aria-label="Nachrichten"></div>
-            <p id="chat-empty" class="chat-empty" hidden>Noch keine Nachrichten. Schreib die erste!</p>
+            <div id="chat-messages" role="log" aria-label="Nachrichten" data-i18n-attr="aria-label:chat.log"></div>
+            <p id="chat-empty" class="chat-empty" hidden data-i18n="chat.empty">Noch keine Nachrichten. Schreib die erste!</p>
           </div>
         </div>
-        <button id="chat-new-pill" class="new-pill" type="button" hidden>Neue Nachrichten</button>
+        <button id="chat-new-pill" class="new-pill" type="button" hidden data-i18n="chat.newMessages">Neue Nachrichten</button>
         <p id="chat-notice" class="chat-notice" hidden></p>
         <form id="chat-form" class="composer" autocomplete="off">
           <div class="composer-inner">
-            <label for="chat-input" class="sr-only">Nachricht</label>
-            <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Nachricht schreiben" enterkeyhint="send"></textarea>
-            <button id="chat-send" class="send-btn" type="submit" aria-label="Senden" disabled>
+            <label for="chat-input" class="sr-only" data-i18n="chat.messageLabel">Nachricht</label>
+            <textarea id="chat-input" rows="1" maxlength="2000" placeholder="Nachricht schreiben" data-i18n-attr="placeholder:chat.placeholder" enterkeyhint="send"></textarea>
+            <button id="chat-send" class="send-btn" type="submit" aria-label="Senden" data-i18n-attr="aria-label:chat.send" disabled>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
             </button>
           </div>
@@ -94,33 +98,77 @@
       <section id="view-markets" class="view" aria-labelledby="view-title" hidden>
         <div class="content">
           <div class="market-head">
-            <p class="market-source">Kurse mit mindestens 15 Minuten Verzögerung · Daten: NGN Market</p>
+            <p class="market-source" data-i18n="markets.source">Kurse mit mindestens 15 Minuten Verzögerung · Daten: NGN Market</p>
             <p id="market-updated" class="market-updated"></p>
             <p id="market-state" class="market-state" role="status" hidden></p>
           </div>
 
           <section class="card" aria-labelledby="h-indices">
-            <h2 id="h-indices">US Indizes</h2>
+            <h2 id="h-indices" data-i18n="markets.indices">US Indizes</h2>
             <div id="market-indices" class="index-grid"></div>
           </section>
 
           <section class="card" aria-labelledby="h-watch">
             <div class="card-head">
-              <h2 id="h-watch">Watchlist der Familie</h2>
-              <a class="btn-link" href="#/einstellungen">Bearbeiten</a>
+              <h2 id="h-watch" data-i18n="markets.watchlist">Watchlist der Familie</h2>
+              <a class="btn-link" href="#/einstellungen" data-i18n="common.edit">Bearbeiten</a>
             </div>
             <ul id="market-watch" class="quote-list"></ul>
           </section>
 
           <section class="card" aria-labelledby="h-top">
-            <h2 id="h-top">Große US Aktien</h2>
-            <label for="market-filter" class="sr-only">Aktie suchen</label>
-            <input id="market-filter" class="search-input" type="search" placeholder="Name oder Symbol suchen" autocomplete="off" spellcheck="false">
+            <h2 id="h-top" data-i18n="markets.top">Große US Aktien</h2>
+            <label for="market-filter" class="sr-only" data-i18n="markets.searchLabel">Aktie suchen</label>
+            <input id="market-filter" class="search-input" type="search" placeholder="Name oder Symbol suchen" data-i18n-attr="placeholder:markets.searchPlaceholder" autocomplete="off" spellcheck="false">
             <ul id="market-top" class="quote-list"></ul>
-            <button id="market-more" class="btn btn-small more-btn" type="button" hidden>Mehr anzeigen</button>
+            <button id="market-more" class="btn btn-small more-btn" type="button" hidden data-i18n="markets.more">Mehr anzeigen</button>
           </section>
 
-          <p class="footer-note">Nur zur Information. Keine Anlageberatung und keine Empfehlung zum Kaufen oder Verkaufen.</p>
+          <p class="footer-note" data-i18n="markets.disclaimer">Nur zur Information. Keine Anlageberatung und keine Empfehlung zum Kaufen oder Verkaufen.</p>
+        </div>
+      </section>
+
+      <!-- Risk -->
+      <section id="view-risk" class="view" aria-labelledby="view-title" hidden>
+        <div class="content">
+          <div class="market-head">
+            <p class="market-source" data-i18n="markets.source">Kurse mit mindestens 15 Minuten Verzögerung · Daten: NGN Market</p>
+            <p id="risk-asof" class="market-updated"></p>
+            <p id="risk-state" class="market-state" role="status" hidden></p>
+          </div>
+
+          <section class="card" aria-labelledby="h-summary">
+            <div class="card-head">
+              <h2 id="h-summary" data-i18n="risk.summaryTitle">KI Zusammenfassung</h2>
+              <div class="mini-toggle" role="group" aria-labelledby="h-summary">
+                <button type="button" data-summary-lang="en" aria-pressed="true" lang="en">EN</button>
+                <button type="button" data-summary-lang="fr" aria-pressed="false" lang="fr">FR</button>
+              </div>
+            </div>
+            <p id="summary-text" class="summary-text"></p>
+            <p id="summary-note" class="small muted"></p>
+          </section>
+
+          <section class="card" aria-labelledby="h-risk">
+            <h2 id="h-risk" data-i18n="risk.title">Risikokennzahlen der Watchlist</h2>
+            <p id="risk-intro" class="muted small"></p>
+            <div id="risk-portfolio"></div>
+            <ul id="risk-list" class="risk-list"></ul>
+          </section>
+
+          <details class="card explain">
+            <summary data-i18n="risk.explainTitle">Was bedeuten die Zahlen?</summary>
+            <ul class="explain-list">
+              <li data-i18n="risk.explain.volatility"></li>
+              <li data-i18n="risk.explain.maxDrawdown"></li>
+              <li data-i18n="risk.explain.currentDrawdown"></li>
+              <li data-i18n="risk.explain.var95"></li>
+              <li data-i18n="risk.explain.beta"></li>
+              <li data-i18n="risk.explain.correlation"></li>
+            </ul>
+          </details>
+
+          <p class="footer-note" data-i18n="risk.disclaimer">Alle Zahlen beschreiben nur die Vergangenheit. Keine Anlageberatung.</p>
         </div>
       </section>
 
@@ -128,7 +176,7 @@
       <section id="view-settings" class="view" aria-labelledby="view-title" hidden>
         <div class="content">
           <section class="card" aria-labelledby="h-account">
-            <h2 id="h-account">Konto</h2>
+            <h2 id="h-account" data-i18n="settings.account">Konto</h2>
             <div class="account">
               <span id="account-avatar"></span>
               <div class="account-text">
@@ -136,60 +184,76 @@
                 <div id="account-mail" class="account-mail"></div>
               </div>
             </div>
-            <button id="btn-signout" class="btn btn-small" type="button">Abmelden</button>
+            <button id="btn-signout" class="btn btn-small" type="button" data-i18n="common.signout">Abmelden</button>
+          </section>
+
+          <section class="card" aria-labelledby="h-language">
+            <h2 id="h-language" data-i18n="settings.language">Sprache</h2>
+            <fieldset class="segmented four" id="language-choice">
+              <legend class="sr-only" data-i18n="settings.languageLegend">Sprache wählen</legend>
+              <label><input type="radio" name="language" value="auto"><span data-i18n="settings.auto">Automatisch</span></label>
+              <label><input type="radio" name="language" value="de"><span lang="de">Deutsch</span></label>
+              <label><input type="radio" name="language" value="en"><span lang="en">English</span></label>
+              <label><input type="radio" name="language" value="fr"><span lang="fr">Français</span></label>
+            </fieldset>
           </section>
 
           <section class="card" aria-labelledby="h-theme">
-            <h2 id="h-theme">Darstellung</h2>
+            <h2 id="h-theme" data-i18n="settings.theme">Darstellung</h2>
             <fieldset class="segmented" id="theme-choice">
-              <legend class="sr-only">Darstellung wählen</legend>
-              <label><input type="radio" name="theme" value="auto"><span>Automatisch</span></label>
-              <label><input type="radio" name="theme" value="light"><span>Hell</span></label>
-              <label><input type="radio" name="theme" value="dark"><span>Dunkel</span></label>
+              <legend class="sr-only" data-i18n="settings.themeLegend">Darstellung wählen</legend>
+              <label><input type="radio" name="theme" value="auto"><span data-i18n="settings.auto">Automatisch</span></label>
+              <label><input type="radio" name="theme" value="light"><span data-i18n="settings.light">Hell</span></label>
+              <label><input type="radio" name="theme" value="dark"><span data-i18n="settings.dark">Dunkel</span></label>
             </fieldset>
           </section>
 
           <section class="card" aria-labelledby="h-watchlist">
-            <h2 id="h-watchlist">Watchlist</h2>
-            <p class="muted small">Gilt für die ganze Familie. Höchstens 10 US Symbole, zum Beispiel AAPL. Neue Symbole erscheinen nach der nächsten Aktualisierung.</p>
+            <h2 id="h-watchlist" data-i18n="settings.watchlist">Watchlist</h2>
+            <p class="muted small" data-i18n="settings.watchHint"></p>
             <ul id="watch-list" class="people"></ul>
             <form id="watch-form" class="add-row" novalidate>
-              <label for="watch-input" class="sr-only">Symbol hinzufügen</label>
-              <input id="watch-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="Symbol">
-              <button class="btn btn-primary btn-small" type="submit">Hinzufügen</button>
+              <label for="watch-input" class="sr-only" data-i18n="settings.watchAddLabel">Symbol hinzufügen</label>
+              <input id="watch-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="12" placeholder="Symbol" data-i18n-attr="placeholder:settings.watchPlaceholder">
+              <button class="btn btn-primary btn-small" type="submit" data-i18n="common.add">Hinzufügen</button>
             </form>
             <p id="watch-error" class="form-error" role="alert"></p>
           </section>
 
           <section id="card-market-admin" class="card" aria-labelledby="h-market-admin" hidden>
-            <h2 id="h-market-admin">Börse</h2>
+            <h2 id="h-market-admin" data-i18n="settings.marketCard">Börse</h2>
             <label class="switch-row">
               <input id="market-switch" type="checkbox" role="switch">
-              <span>Kurse von NGN Market abrufen</span>
+              <span data-i18n="settings.marketSwitch">Kurse von NGN Market abrufen</span>
             </label>
-            <p class="muted small">Eingeschaltet holt der Server an US Handelstagen alle 30 Minuten neue Kurse. Ausgeschaltet macht er keine Abrufe.</p>
+            <p class="muted small" data-i18n="settings.marketHint"></p>
+            <label class="switch-row">
+              <input id="ai-switch" type="checkbox" role="switch">
+              <span data-i18n="settings.aiSwitch">Tägliche KI Zusammenfassung (Claude)</span>
+            </label>
+            <p class="muted small" data-i18n="settings.aiHint"></p>
             <p id="market-usage" class="small"></p>
           </section>
 
           <section id="card-access" class="card" aria-labelledby="h-access" hidden>
-            <h2 id="h-access">Zugang</h2>
-            <p class="muted small">Nur diese Mailadressen können sich anmelden. Es muss die Mailadresse des Google Kontos sein. Admins dürfen diese Liste ändern und jede Chatnachricht löschen.</p>
+            <h2 id="h-access" data-i18n="settings.access">Zugang</h2>
+            <p class="muted small" data-i18n="settings.accessHint"></p>
             <ul id="access-list" class="people"></ul>
             <form id="access-form" class="add-row" novalidate>
-              <label for="access-input" class="sr-only">Mailadresse hinzufügen</label>
+              <label for="access-input" class="sr-only" data-i18n="settings.accessAddLabel">Mailadresse hinzufügen</label>
               <input id="access-input" type="email" inputmode="email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="name@gmail.com">
-              <button class="btn btn-primary btn-small" type="submit">Hinzufügen</button>
+              <button class="btn btn-primary btn-small" type="submit" data-i18n="common.add">Hinzufügen</button>
             </form>
             <p id="access-error" class="form-error" role="alert"></p>
           </section>
 
           <section class="card" aria-labelledby="h-info">
-            <h2 id="h-info">Hinweise</h2>
-            <p class="small">Chatnachrichten sind nicht Ende zu Ende verschlüsselt.</p>
-            <p class="small muted">Die Nachrichten speichert Google Firebase in Frankfurt.</p>
+            <h2 id="h-info" data-i18n="settings.notes">Hinweise</h2>
+            <p class="small" data-i18n="settings.notE2E">Chatnachrichten sind nicht Ende zu Ende verschlüsselt.</p>
+            <p class="small muted" data-i18n="settings.storage">Die Nachrichten speichert Google Firebase in Frankfurt.</p>
           </section>
 
-          <p class="footer-note">FamilyHub · Version <span id="app-version"></span></p>
+          <p class="footer-note">FamilyHub · <span data-i18n="settings.version">Version</span> <span id="app-version"></span></p>
         </div>
       </section>
     </main>

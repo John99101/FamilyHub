@@ -11,6 +11,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-app-check.js';
 import { firebaseConfig, recaptchaEnterpriseSiteKey } from './firebase-config.js';
+import { lang } from './i18n.js';
 
 // On this computer (npm run emulators) the app uses the local emulators and a
 // demo project, so tests can never touch the real data.
@@ -30,7 +31,7 @@ if (!isLocal && recaptchaEnterpriseSiteKey) {
 }
 
 export const auth = getAuth(app);
-auth.languageCode = 'de';
+auth.languageCode = lang;
 
 export const db = getFirestore(app);
 

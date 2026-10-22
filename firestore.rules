@@ -8,7 +8,7 @@ rules_version = '2';
 //   config/market                         market on/off switch: { enabled, updatedAt, updatedBy } (missing = on)
 //   rooms/{roomId}                        chat room: { name, createdAt }
 //   rooms/{roomId}/messages/{messageId}   message: { uid, name, photo, text, createdAt }
-//   market/{latest|status|calendar}       written only by the Cloud Function (Admin SDK)
+//   market/{latest|status|calendar|risk|riskSummary}  written only by the Cloud Functions (Admin SDK)
 //   marketHistory/{symbol}                daily closes, written only by the Cloud Function
 //
 // Everything that is not matched below is denied.
@@ -128,13 +128,15 @@ service cloud.firestore {
       allow create, update: if isMember() && validWatchlist();
     }
 
-    // On/off switch for fetching market data (read by the Cloud Function).
+    // On/off switches read by the Cloud Functions: fetching market data
+    // (enabled) and the daily AI summary (aiEnabled, optional). Missing = on.
     match /config/market {
       allow read: if isMember();
       allow create, update: if isAdmin()
-        && request.resource.data.keys().hasOnly(['enabled', 'updatedAt', 'updatedBy'])
+        && request.resource.data.keys().hasOnly(['enabled', 'aiEnabled', 'updatedAt', 'updatedBy'])
         && request.resource.data.keys().hasAll(['enabled', 'updatedAt', 'updatedBy'])
         && request.resource.data.enabled is bool
+        && (!('aiEnabled' in request.resource.data) || request.resource.data.aiEnabled is bool)
         && request.resource.data.updatedAt == request.time
         && request.resource.data.updatedBy == myMail();
     }

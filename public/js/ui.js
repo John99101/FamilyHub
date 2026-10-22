@@ -1,5 +1,6 @@
 // Small helpers for building the page safely (text is always set as text,
-// never as HTML) and for German date and time formats.
+// never as HTML) and for date and time formats in the chosen language.
+import { t, locale } from './i18n.js';
 
 export const $ = (id) => document.getElementById(id);
 
@@ -66,13 +67,29 @@ export function toast(text) {
   toastTimer = setTimeout(() => { box.hidden = true; }, 3500);
 }
 
-const timeFormat = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
-const dayFormat = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
-const dayYearFormat = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-const dateTimeFormat = new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const timeFormat = new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const dayFormat = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+const dayYearFormat = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const dateTimeFormat = new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+const longDateFormat = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const shortDateFormat = new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
+
+/** 'YYYY-MM-DD' → "02.10.2026" / "02/10/2026". */
+export function formatShortDay(iso) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+  if (!match) return '';
+  return shortDateFormat.format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))));
+}
 
 export const formatTime = (date) => timeFormat.format(date);
 export const formatDateTime = (date) => dateTimeFormat.format(date);
+
+/** 'YYYY-MM-DD' (a calendar day, no time zone) → "21. Oktober 2026" / "21 October 2026" / "21 octobre 2026". */
+export function formatDay(iso) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+  if (!match) return '';
+  return longDateFormat.format(new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))));
+}
 
 export function dayKey(date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
@@ -82,7 +99,7 @@ export function dayLabel(date, now = new Date()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const that = new Date(date.getFullYear(), date.getMonth(), date.getDate());
   const diffDays = Math.round((today - that) / 86400000);
-  if (diffDays === 0) return 'Heute';
-  if (diffDays === 1) return 'Gestern';
+  if (diffDays === 0) return t('day.today');
+  if (diffDays === 1) return t('day.yesterday');
   return (date.getFullYear() === now.getFullYear() ? dayFormat : dayYearFormat).format(date);
 }

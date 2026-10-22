@@ -152,6 +152,30 @@ support@ngnmarket.com:
 > Thank you,
 > (your name)
 
+**3b. Anthropic API key for the daily AI summary (Claude)**
+
+The Risiko page shows a short daily summary in English and French, written by
+Claude Opus 5.5. The server sends only the computed risk numbers to Anthropic;
+no chat messages, no names of family members. Under Anthropic's commercial
+terms, API data is not used to train models by default.
+
+1. Open https://console.anthropic.com and create an account (or sign in).
+2. **Settings** → **Billing**: add a payment method and buy a small amount of
+   credit, for example 5 USD. (The API is prepaid; when the credit is used
+   up, the summary simply stops appearing.)
+3. **Settings** → **Limits**: set a **monthly spend limit**, for example 5 USD.
+4. **Settings** → **API keys** → **Create key**. Name: `FamilyHub`. Copy the
+   key right away (it is shown once). Never paste it into a chat or a file.
+5. In PowerShell inside `D:\Dev_Ing\FamilyHub` (after `firebase login` and
+   `firebase use familyhub-5355f`):
+
+   ```
+   firebase functions:secrets:set ANTHROPIC_API_KEY
+   ```
+
+   Paste the key when asked and press Enter. It now lives only in Google
+   Secret Manager.
+
 ---
 
 ## 4. Add the first admin by hand
@@ -212,7 +236,9 @@ During the first deploy:
   Artifact Registry, Cloud Run, Cloud Scheduler, Secret Manager). Answer **Y**.
 - If it asks about a **cleanup policy** for container images, answer **Y**
   and keep the suggested 1 day. This keeps storage (and cost) near zero.
-- If it says the secret NGN_API_KEY is missing, do step 3 first.
+- If it says the secret NGN_API_KEY or ANTHROPIC_API_KEY is missing, do
+  step 3 (and 3b) first. The deploy creates two functions: `marketUpdate`
+  (prices) and `riskSummary` (the daily AI summary).
 
 At the end it prints **Hosting URL**: `https://familyhub-5355f.web.app`.
 Both `https://familyhub-5355f.web.app` and `https://familyhub-5355f.firebaseapp.com`
@@ -220,9 +246,11 @@ work. **Share the `firebaseapp.com` address with the family**: on phones,
 especially iPhones and the installed app, Google sign in works most reliably
 there.
 
-Open it, click **Mit Google anmelden**, sign in with `<your-mail>`. You should
-see the chat. The first time an admin opens the app, the chat room "Familie" is
-created automatically.
+Open it, click **Mit Google anmelden** (the app follows the browser's
+language: German, English or French; you can change it under
+**Einstellungen** → **Sprache**), and sign in with `<your-mail>`. You should
+see the chat. The first time an admin opens the app, the chat room "Familie"
+is created automatically.
 
 **Install as an app on phones**
 
@@ -292,6 +320,22 @@ time (15:30 to 22:30 in Germany most of the year), Monday to Friday, except US
 holidays. The switch is in the app (admins only): **Einstellungen** →
 **Börse** → **Kurse von NGN Market abrufen**.
 
+**When the risk figures and the AI summary appear** (page **Risiko**)
+
+- The risk figures are computed by the server in plain code (no AI) after
+  each US trading day, from the closing prices the app stores itself. A stock
+  needs **20 trading days** of stored closes before its figures appear, so
+  expect about **4 weeks** after the first deploy, or after adding a new
+  symbol to the watchlist. Until then the page shows "Noch zu wenig Daten:
+  x von 20 Handelstagen". (With the NGN Hobby plan, the app could later load
+  2 years of history at once; not built yet.)
+- The AI summary is written once per US trading day at 17:15 New York time
+  (23:15 in Germany most of the year), in English and French, as soon as at
+  least one stock has figures. It only describes the numbers and never gives
+  advice. Switch it off in the app: **Einstellungen** → **Börse** →
+  **Tägliche KI Zusammenfassung (Claude)**.
+- Nothing here needs your computer: both jobs run on Google's servers.
+
 **See how many API calls are used**
 
 - In the app: **Einstellungen** → **Börse** shows "NGN Abrufe: … verbraucht,
@@ -300,6 +344,8 @@ holidays. The switch is in the app (admins only): **Einstellungen** →
 - In the logs: Firebase console → **Build** → **Functions** → `marketUpdate`
   → **Logs**. Each run writes a line "NGN market run" with `callsThisRun`,
   `callsUsed` and `callsRemaining`.
+- AI usage: https://console.anthropic.com → **Usage**. The `riskSummary` logs
+  show "AI summary written" with the tokens used per day.
 
 **Estimated calls per month (free plan: 3,000)**
 
@@ -329,15 +375,24 @@ All of this stays inside Google's free amounts for a family:
 - Hosting: free up to 10 GB storage and 360 MB transfer per day.
 - Firestore: free up to 50,000 reads and 20,000 writes per day. The market
   function writes about 2 documents per run (≈ 650 writes per month).
-- Cloud Functions: about 350 runs per month; free up to 2 million.
-- Cloud Scheduler: 3 jobs free per billing account; this app uses 1.
-- Secret Manager: free up to 6 secret versions and 10,000 reads per month.
-- Possible small costs: storing the function's container image (Artifact
+- Cloud Functions: about 370 runs per month; free up to 2 million.
+- Cloud Scheduler: 3 jobs free per billing account; this app uses 2.
+- Secret Manager: free up to 6 secret versions and 10,000 reads per month;
+  this app uses 2 secrets.
+- Possible small costs: storing the functions' container images (Artifact
   Registry, free up to 0.5 GB; the cleanup policy from step 5 keeps it small)
   and Cloud Build minutes when you deploy (free amount per month).
 
-Expected: **0 EUR to a few cents per month.** The 5 EUR budget alert warns you
-long before anything matters.
+Expected on Google: **0 EUR to a few cents per month.** The 5 EUR budget alert
+warns you long before anything matters.
+
+**AI summary (Anthropic, billed separately from Google):** Claude Opus 5.5
+costs 4 USD per million input tokens and 20 USD per million output tokens.
+One daily summary is about 1,500 input tokens and up to about 3,000 output
+tokens (its thinking counts as output): roughly 0.07 USD per day, so about
+**1 to 3 USD per month** (about 21 trading days). The spend limit from step 3b
+caps it. If Claude declines a request (rare), Anthropic retries it once on a
+fallback model it picks; that is billed at that model's price.
 
 **Switch the market part off**
 
@@ -353,6 +408,20 @@ long before anything matters.
 - Key: revoke it on https://ngnmarket.com → **Dashboard** → **Developer**, and
   optionally delete the secret in Google Cloud console → **Security** →
   **Secret Manager** → `NGN_API_KEY` → **Delete**.
+
+**Switch the AI summary off**
+
+- Soft: in the app, **Einstellungen** → **Börse** → switch off **Tägliche KI
+  Zusammenfassung (Claude)**. No more requests to Anthropic; the last summary
+  stays visible.
+- Hard:
+
+  ```
+  firebase functions:delete riskSummary --region europe-west3
+  ```
+
+  And revoke the key on https://console.anthropic.com → **Settings** →
+  **API keys**.
 
 ---
 

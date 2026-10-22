@@ -1,0 +1,55 @@
+// Checks the app text in all three languages: same keys, same {placeholders},
+// no hyphen or dash characters, and "Mail" instead of "E-Mail".
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { STRINGS } from '../public/js/strings.js';
+
+const LANGS = ['de', 'en', 'fr'];
+const DASHES = /[-‐-―−﹘﹣－]/;
+const placeholders = (s) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+
+describe('app text', () => {
+  it('has German, English and French with exactly the same keys', () => {
+    assert.deepEqual(Object.keys(STRINGS).sort(), [...LANGS].sort());
+    const keys = Object.keys(STRINGS.de).sort();
+    for (const lang of ['en', 'fr']) assert.deepEqual(Object.keys(STRINGS[lang]).sort(), keys, lang);
+  });
+
+  it('uses the same placeholders in every language', () => {
+    for (const key of Object.keys(STRINGS.de)) {
+      for (const lang of ['en', 'fr']) assert.deepEqual(placeholders(STRINGS[lang][key]), placeholders(STRINGS.de[key]), `${lang} ${key}`);
+    }
+  });
+
+  it('contains no hyphen or dash characters and no empty texts', () => {
+    for (const lang of LANGS) {
+      for (const [key, text] of Object.entries(STRINGS[lang])) {
+        assert.ok(text.trim().length > 0, `${lang} ${key} is empty`);
+        assert.ok(!DASHES.test(text), `${lang} ${key}: "${text}"`);
+      }
+    }
+  });
+
+  it('says "Mail", never "E-Mail" or "email"', () => {
+    for (const lang of LANGS) {
+      for (const [key, text] of Object.entries(STRINGS[lang])) {
+        // Catches "email", "e-mail", "E-Mail" as words, not "diese Mail".
+        assert.ok(!/\be[‐-―-]?mail/i.test(text), `${lang} ${key}: "${text}"`);
+      }
+    }
+  });
+
+  it('every key used in the page exists', () => {
+    const html = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+    const used = new Set();
+    for (const m of html.matchAll(/data-i18n="([^"]+)"/g)) used.add(m[1]);
+    for (const m of html.matchAll(/data-i18n-attr="([^"]+)"/g)) for (const pair of m[1].split(';')) used.add(pair.split(':')[1].trim());
+    const jsDir = new URL('../public/js/', import.meta.url);
+    for (const file of readdirSync(jsDir).filter((f) => f.endsWith('.js'))) {
+      const src = readFileSync(new URL(file, jsDir), 'utf8');
+      for (const m of src.matchAll(/\bt\(\s*'([\w.]+)'/g)) used.add(m[1]);
+    }
+    for (const key of used) assert.ok(key in STRINGS.de, `missing key ${key}`);
+  });
+});

@@ -75,6 +75,8 @@ export function memoryStore(initial = {}) {
     calendar: null,
     latest: null,
     history: {},
+    risk: null,
+    riskSummary: null,
     ...initial,
   };
   return {
@@ -90,7 +92,30 @@ export function memoryStore(initial = {}) {
     async saveCloses(symbol, entries) {
       state.history[symbol] = trimCloses({ ...(state.history[symbol] || {}), ...entries });
     },
+    async getHistories(symbols) {
+      return Object.fromEntries(symbols.map((s) => [s, structuredClone(state.history[s] || {})]));
+    },
+    async getRisk() { return state.risk ? structuredClone(state.risk) : null; },
+    async saveRisk(r) { state.risk = structuredClone(r); },
+    async getRiskSummary() { return state.riskSummary ? structuredClone(state.riskSummary) : null; },
+    async saveRiskSummary(fields) { state.riskSummary = { ...(state.riskSummary || {}), ...structuredClone(fields) }; },
   };
+}
+
+/** Closing prices for N trading days (weekdays) ending on endDate, from a price function. */
+export function makeCloses(endDate, count, priceAt) {
+  const closes = {};
+  const d = new Date(`${endDate}T12:00:00Z`);
+  let i = count - 1;
+  while (i >= 0) {
+    const day = d.getUTCDay();
+    if (day !== 0 && day !== 6) {
+      closes[d.toISOString().slice(0, 10)] = priceAt(i);
+      i -= 1;
+    }
+    d.setUTCDate(d.getUTCDate() - 1);
+  }
+  return closes;
 }
 
 export const silentLogger = () => {

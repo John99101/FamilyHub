@@ -7,7 +7,7 @@ import {
   nyParts, planRun, previousTradingDay, parseTickerList, parseIndices, parseHolidays,
   runMarketUpdate, cleanWatchlist, closesFromQuotes, MAX_EXTRA_SEARCHES,
 } from '../market.js';
-import { stubClient, memoryStore, topTickers, indexItems, tickerItem, meta, silentLogger } from './helpers.js';
+import { stubClient, memoryStore, topTickers, indexItems, tickerItem, meta, silentLogger, makeCloses } from './helpers.js';
 
 const realFetch = globalThis.fetch;
 before(() => { globalThis.fetch = () => { throw new Error('real network call in a test'); }; });
@@ -291,10 +291,44 @@ describe('scheduled run', () => {
     const store = memoryStore({ calendar: freshCalendar(at1630), watchlist: ['AAPL', 'ZEXTRA'] });
     const result = await runMarketUpdate({ client, store, now: at1630, logger: silentLogger() });
     assert.equal(result.kind, 'afterClose');
-    assert.equal(result.closesSaved, 2);
+    assert.equal(result.closesSaved, 3, 'two watchlist symbols plus the S&P 500');
     const aapl = store.state.latest.quotes.find((q) => q.symbol === 'AAPL');
     assert.deepEqual(store.state.history.AAPL, { '2026-10-20': aapl.prevClose, '2026-10-21': aapl.price });
     assert.ok(store.state.history.ZEXTRA['2026-10-21']);
+    assert.equal(store.state.history.$SPX['2026-10-21'], 6712.45);
+  });
+
+  it('after the close it computes the risk figures from the stored closes', async () => {
+    const at1630 = new Date('2026-10-21T20:30:00Z');
+    const client = stubClient(normalAnswers({ quoteTime: '2026-10-21T20:00:00.000Z' }));
+    const store = memoryStore({
+      calendar: freshCalendar(at1630),
+      watchlist: ['AAPL', 'ZEXTRA'],
+      history: {
+        AAPL: makeCloses('2026-10-20', 30, (i) => 150 + Math.sin(i) * 4),
+        $SPX: makeCloses('2026-10-20', 30, (i) => 6600 + Math.sin(i) * 50),
+      },
+    });
+    const result = await runMarketUpdate({ client, store, now: at1630, logger: silentLogger() });
+    assert.equal(result.riskSaved, true);
+    const risk = store.state.risk;
+    assert.equal(risk.asOf, '2026-10-21');
+    assert.equal(risk.benchmark, '$SPX');
+    assert.deepEqual(risk.symbols.map((s) => s.symbol), ['AAPL', 'ZEXTRA']);
+    const aapl = risk.symbols[0];
+    assert.equal(aapl.enough, true);
+    assert.equal(aapl.name, 'Apple Inc.');
+    assert.equal(aapl.to, '2026-10-21', 'today\'s close is included');
+    assert.equal(typeof aapl.beta, 'number');
+    assert.equal(risk.symbols[1].enough, false, 'a new symbol has no history yet');
+  });
+
+  it('regular runs do not compute risk figures', async () => {
+    const client = stubClient(normalAnswers());
+    const store = memoryStore({ calendar: freshCalendar(WED_10_00), watchlist: ['AAPL'] });
+    const result = await runMarketUpdate({ client, store, now: WED_10_00, logger: silentLogger() });
+    assert.equal(result.riskSaved, false);
+    assert.equal(store.state.risk, null);
   });
 
   it('regular runs do not touch the chart history', async () => {

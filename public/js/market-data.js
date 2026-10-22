@@ -13,7 +13,9 @@ export function createMarketData() {
     switch: null,     // config/market
     watchlist: [],    // config/watchlist symbols
     history: {},      // symbol -> { closes }
-    loaded: { latest: false, status: false, switch: false, watchlist: false },
+    risk: null,       // market/risk (risk figures, computed by the server)
+    riskSummary: null, // market/riskSummary (daily AI summary, en and fr)
+    loaded: { latest: false, status: false, switch: false, watchlist: false, risk: false, riskSummary: false },
   };
   const listeners = new Set();
   const notify = () => { for (const fn of listeners) fn(state); };
@@ -31,6 +33,8 @@ export function createMarketData() {
     watch('market/status', 'status'),
     watch('config/market', 'switch'),
     watch('config/watchlist', 'watchlist', (d) => (Array.isArray(d?.symbols) ? d.symbols.filter((s) => typeof s === 'string') : [])),
+    watch('market/risk', 'risk'),
+    watch('market/riskSummary', 'riskSummary'),
   ];
 
   // Daily closes for the small charts (changes once a day, so read, not listened to).

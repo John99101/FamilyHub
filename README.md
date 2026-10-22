@@ -1,7 +1,8 @@
 # FamilyHub
 
 A small private website for the family (about 5 to 15 people), usable on
-computers and phones and installable as an app. The app text is German.
+computers and phones and installable as an app. The app is in German, English
+and French (it follows the browser; changeable in the settings).
 
 - **Sign in with Google only.** Only mail addresses on an allow list get in;
   everyone else sees "Kein Zugang".
@@ -12,9 +13,15 @@ computers and phones and installable as an app. The app text is German.
 - **Börse** (markets): US indices, the 200 largest US stocks, a family
   watchlist of up to 10 symbols with small charts. Prices are delayed at least
   15 minutes, data from NGN Market. No trading, no advice, no alerts.
-- **Einstellungen** (settings): allow list and admins (admins only), the
-  watchlist, the market on/off switch (admins only), light or dark look, sign
-  out.
+- **Risiko** (risk): theoretical risk figures for the watchlist, computed in
+  plain code from the closing prices the app stores (yearly volatility,
+  biggest fall from a peak, distance to the high, 95 % daily loss, worst day,
+  change, beta and correlation to the S&P 500, plus the whole watchlist), and
+  a short daily summary in English and French written by Claude Opus 5.5.
+  Describes the past only; no advice.
+- **Einstellungen** (settings): language, light or dark look, the watchlist,
+  the market and AI switches (admins only), allow list and admins (admins
+  only), sign out.
 
 Setup for the owner: see **[SETUP.md](SETUP.md)**.
 
@@ -27,19 +34,36 @@ Browser (public/)                Firebase (Google, region europe-west3)
  (pinned, from gstatic)  ◄──────► Firestore     allow list, chat, watchlist, stored market data
                                   App Check     reCAPTCHA Enterprise (enforced after testing)
                                   Functions     marketUpdate (Node.js 22), every 30 min
-                                     │          on US trading days, key from Secret Manager
+                                     │          on US trading days; after the close it
+                                     │          also computes the risk figures
                                      ▼
                                   NGN Market API (free plan, US endpoints)
+
+                                  Functions     riskSummary, 17:15 New York time on weekdays
+                                     │          sends only the computed figures
+                                     ▼
+                                  Anthropic API (Claude Opus 5.5)
 ```
+
+Both functions run on Google's servers on a timer; no computer has to be on.
+Keys (NGN_API_KEY, ANTHROPIC_API_KEY) live only in Secret Manager.
 
 - No server to run, no build step, no PHP. Hosting serves the files in
   `public/` as they are.
 - **Who may do what is decided by `firestore.rules`**, not by the page. The
   page reads `config/access`; the rules only allow that for people on the list,
   so "readable" means "member" and "refused" means "Kein Zugang".
-- **The browser never talks to NGN Market and never sees the key.** The
-  scheduled Cloud Function fetches the data, stores a copy in Firestore, and the
-  page shows only that copy.
+- **The browser never talks to NGN Market or Anthropic and never sees a key.**
+  The scheduled Cloud Functions fetch and compute, store a copy in Firestore,
+  and the page shows only that copy.
+- **Numbers come from code, words from the AI.** `functions/risk.js` computes
+  every figure (tested with hand checkable values). `functions/ai-summary.js`
+  gives Claude only these numbers, with rules: use only the given figures, no
+  news, no forecasts, never advise, at most 110 words per language, no hyphens
+  or dashes. The answer comes back as JSON (`en`, `fr`) through structured
+  outputs; hyphens and dashes are removed again as a safety net. If Claude
+  declines, Anthropic's server side fallback (`fallbacks: "default"`) retries
+  once on another model; a failed day keeps the last summary visible.
 - The service worker (`public/sw.js`) caches only the page files (HTML, CSS,
   JS, icons), never chat or market data.
 
@@ -49,13 +73,15 @@ Browser (public/)                Firebase (Google, region europe-west3)
 | :- | :- | :- |
 | `config/access` | `members: [mail]`, `admins: [mail]`, `updatedAt`, `updatedBy` | admins (first admin by hand) |
 | `config/watchlist` | `symbols: [..]` (max 10), `updatedAt`, `updatedBy` | members |
-| `config/market` | `enabled` (market on/off), `updatedAt`, `updatedBy` | admins |
+| `config/market` | `enabled` (market on/off), `aiEnabled` (AI summary on/off), `updatedAt`, `updatedBy`; missing values count as on | admins |
 | `rooms/{roomId}` | `name`, `createdAt` (room "familie"; more rooms later) | admins |
 | `rooms/{roomId}/messages/{id}` | `uid`, `name`, `photo`, `text`, `createdAt` | the sender (delete: sender or admin) |
 | `market/latest` | `updatedAt`, `quotes` (top 200), `indices`, `extras` (watchlist symbols outside the top 200) | Cloud Function only |
 | `market/status` | state, pause time, calls used and remaining, quota reset, last error, unknown symbols | Cloud Function only |
 | `market/calendar` | US market holidays (refreshed weekly) | Cloud Function only |
-| `marketHistory/{symbol}` | `closes: { "YYYY-MM-DD": price }` for the small charts | Cloud Function only |
+| `market/risk` | `asOf`, `windowDays` (60), `minDays` (20), `symbols` (figures per stock), `portfolio` (whole watchlist) | Cloud Function only |
+| `market/riskSummary` | `asOf`, `en`, `fr`, `model`, `usage`, `lastError` | Cloud Function only |
+| `marketHistory/{symbol}` | `closes: { "YYYY-MM-DD": price }` for the charts and risk figures (watchlist symbols and `$SPX`) | Cloud Function only |
 
 Everything else is denied. Message rules check: sender uid, server time, text
 1 to 2000 characters (and not only spaces), name and photo equal to what Google
@@ -82,8 +108,9 @@ Corrections to the notes from the brief:
 Schedule: every 30 minutes 09:00 to 16:30 New York time, Monday to Friday. The
 code skips 09:00 (before the open), weekends, full holidays, and the slots after
 an early close. 16:30 (or 30 minutes after an early close) is the "after the
-close" run, which also stores one closing price per watchlist symbol and day
-(and fixes the previous day with the official `prev_close`).
+close" run, which also stores one closing price per watchlist symbol and day,
+plus the S&P 500 as benchmark (and fixes the previous day with the official
+`prev_close`), and then computes the risk figures (`market/risk`).
 
 Budget guard: `meta.calls_remaining` is read after every answer. Below 300 the
 run stops and all runs pause until `reset_at`; the page shows "Kurse pausiert
@@ -135,28 +162,34 @@ location.
 
 ```
 public/                 the website (served by Firebase Hosting)
-  index.html            all screens: sign in, Kein Zugang, Chat, Börse, Einstellungen
+  index.html            all screens: sign in, Kein Zugang, Chat, Börse, Risiko, Einstellungen
   css/app.css           styles, mobile first, light and dark
   js/firebase-config.js web config of your project (not secret) and the App Check key
   js/firebase.js        loads the pinned Firebase SDK, emulators on localhost
   js/app.js             sign in, allow list check, navigation
   js/chat.js            chat
   js/markets.js         Börse page
+  js/risk-page.js       Risiko page (risk figures and AI summary)
   js/market-data.js     live copies of the market documents
   js/settings.js        settings
-  js/ui.js              small helpers (safe text, German dates)
+  js/strings.js         all app text in German, English and French
+  js/i18n.js            picks the language, fills the page text
+  js/ui.js              small helpers (safe text, dates in the chosen language)
   js/theme-boot.js      applies light or dark before the page is drawn
   manifest.webmanifest  installable app
   sw.js                 service worker (page files only)
   icons/                own icons (house with heart), made by scripts/make-icons.mjs
-functions/              Cloud Function (Node.js 22, firebase-functions v2 API)
-  index.js              marketUpdate schedule
+functions/              Cloud Functions (Node.js 22, firebase-functions v2 API)
+  index.js              marketUpdate and riskSummary schedules
   ngn-client.js         small NGN Market client
-  market.js             trading days, budget guard, parsing, the run itself
+  market.js             trading days, budget guard, parsing, the market run
+  risk.js               risk figures in plain code (volatility, drawdown, beta, ...)
+  ai-summary.js         daily summary with Claude Opus 5.5 (prompt, request, checks)
   firestore-store.js    reading and writing the market documents
-  test/                 function tests with a stub API (no real calls)
-  scripts/demo-stub-data.mjs   fills the LOCAL emulator with made up market data
+  test/                 function tests with stub APIs (no real calls)
+  scripts/demo-stub-data.mjs   fills the LOCAL emulator with made up data and a demo summary
 tests/rules.test.js     security rules tests (Firestore emulator)
+tests/strings.test.js   app text checks (same keys in 3 languages, no dashes, "Mail")
 scripts/serve-local.mjs local web server with the same headers (for testing)
 scripts/make-icons.mjs  draws the icons
 firebase.json           Hosting, headers, Firestore, Functions, emulators
@@ -174,7 +207,7 @@ deployed function runs on Node.js 22).
 ```
 npm install
 npm --prefix functions install
-npm test               # 31 function tests + 35 rules tests
+npm test               # 5 text checks + 56 function tests + 37 rules tests
 npm run emulators      # local site on http://127.0.0.1:5000, Emulator UI on :4000
 npm run demo:market    # (second window) made up market data for the local site
 ```
@@ -194,5 +227,8 @@ When changing page files, also raise `VERSION` in `public/sw.js` and
 - Images and files in the chat
 - More chat rooms (the data model already supports them)
 - Price alerts
-- Paid NGN Market features (single ticker details, official charts, movers)
+- Paid NGN Market features (single ticker details, official charts, movers);
+  with the Hobby plan, 2 years of price history could fill the risk figures
+  at once instead of after 20 trading days
+- More languages (add one more block in `public/js/strings.js`)
 - End to end encryption for the chat

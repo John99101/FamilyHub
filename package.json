@@ -5,9 +5,10 @@
   "description": "Private family website: chat, markets page and settings on Firebase.",
   "type": "module",
   "scripts": {
-    "test": "npm run test:functions && npm run test:rules",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-familyhub \"node --test tests/rules.test.js\"",
+    "test": "npm run test:strings && npm run test:functions && npm run test:rules",
+    "test:strings": "node --test tests/strings.test.js",
     "test:functions": "npm --prefix functions test",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-familyhub \"node --test tests/rules.test.js\"",
     "emulators": "firebase emulators:exec --only auth,firestore --project demo-familyhub --ui \"node scripts/serve-local.mjs\"",
     "demo:market": "node functions/scripts/demo-stub-data.mjs",
     "icons": "node scripts/make-icons.mjs"

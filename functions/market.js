@@ -1,6 +1,7 @@
 // Market update logic. Pure functions plus one orchestrator (runMarketUpdate)
 // that gets the API client and the storage passed in, so tests can use stubs.
 import { NgnError } from './ngn-client.js';
+import { computeRiskReport, BENCHMARK_SYMBOL } from './risk.js';
 
 export const NY_TIME_ZONE = 'America/New_York';
 export const OPEN_MINUTES = 9 * 60 + 30;          // 09:30 New York time
@@ -122,10 +123,18 @@ export function parseIndices(data) {
       symbol: i.symbol,
       name: str(i.name) || i.symbol,
       price: num(i.last_price),
+      prevClose: num(i.prev_close),
       changeAbs: num(i.change_abs),
       changePct: num(i.change_pct),
       quoteTime: str(i.quote_time),
     }));
+}
+
+/** The S&P 500 index from the indices list (benchmark for beta and correlation). */
+export function findBenchmark(indices = []) {
+  return indices.find((i) => i.symbol === BENCHMARK_SYMBOL)
+    || indices.find((i) => /s\s*&\s*p\s*500/i.test(String(i.name)) && !/equal|futures/i.test(String(i.name)))
+    || null;
 }
 
 export function parseHolidays(data) {
@@ -343,21 +352,33 @@ export async function runMarketUpdate({ client, store, now = new Date(), logger 
     });
   }
 
-  // Closing prices for the watchlist charts, once a day after the close.
+  // Once a day after the close: closing prices for the charts (watchlist plus
+  // the S&P 500 as benchmark), then the risk figures from the stored closes.
   let closesSaved = 0;
+  let riskSaved = false;
   if (plan.kind === 'afterClose' && gotData) {
-    const all = [...(quotes || []), ...freshExtras.values()];
-    const closes = closesFromQuotes(all, watchlist, ny.date, previousTradingDay(ny.date, holidays));
+    const benchmark = findBenchmark(indices || previous.indices || []);
+    const targets = benchmark ? [...watchlist, benchmark.symbol] : watchlist;
+    const all = [...(quotes || []), ...freshExtras.values(), ...(indices || [])];
+    const closes = closesFromQuotes(all, targets, ny.date, previousTradingDay(ny.date, holidays));
     for (const [symbol, entries] of Object.entries(closes)) {
       await store.saveCloses(symbol, entries);
       closesSaved += 1;
     }
+
+    const names = {};
+    for (const q of [...(previous.quotes || []), ...(previous.extras || []), ...(quotes || []), ...extras]) names[q.symbol] = q.name;
+    const histories = await store.getHistories(targets);
+    await store.saveRisk(computeRiskReport({
+      watchlist, histories, names, benchmarkSymbol: benchmark ? benchmark.symbol : null, asOf: ny.date, now,
+    }));
+    riskSaved = true;
   }
 
   await saveStatus({ success: gotData });
-  logRun(plan.kind, plan.reason, { closesSaved, extraSearches: candidates.length });
+  logRun(plan.kind, plan.reason, { closesSaved, riskSaved, extraSearches: candidates.length });
   return summary(plan.kind, plan.reason, {
-    calls: guard.calls, state: guard.state, pausedUntil: guard.pausedUntil, error: guard.error, closesSaved,
+    calls: guard.calls, state: guard.state, pausedUntil: guard.pausedUntil, error: guard.error, closesSaved, riskSaved,
   });
 
   function fetchedMs(q) {

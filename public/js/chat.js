@@ -7,6 +7,7 @@ import {
   db, collection, doc, query, orderBy, limit, onSnapshot, getDoc, setDoc, addDoc, deleteDoc, serverTimestamp,
 } from './firebase.js';
 import { $, el, avatar, svgIcon, TRASH_ICON, toast, formatTime, formatDateTime, dayKey, dayLabel } from './ui.js';
+import { t } from './i18n.js';
 
 export const ROOM_ID = 'familie';
 const ROOM_NAME = 'Familie';
@@ -109,13 +110,13 @@ export function createChat(session) {
   function onError(err) {
     console.warn('Chat listener error', err.code);
     // Losing access is handled by the app (it shows "Kein Zugang").
-    if (err.code !== 'permission-denied') toast('Der Chat ist gerade nicht erreichbar.');
+    if (err.code !== 'permission-denied') toast(t('chat.unavailable'));
   }
 
   function loadOlder() {
     if (!hasMore || loadingOlder || stopped) return;
     loadingOlder = true;
-    topLine.textContent = 'Ältere Nachrichten werden geladen';
+    topLine.textContent = t('chat.loadingOlder');
     windowSize = messages.size + PAGE_SIZE;
     subscribe();
   }
@@ -164,17 +165,17 @@ export function createChat(session) {
     const date = new Date(m.ms);
     const meta = el('div', { class: 'msg-meta' }, [
       m.pending
-        ? el('span', { text: 'Wird gesendet' })
+        ? el('span', { text: t('chat.sending') })
         : el('time', { datetime: date.toISOString(), title: formatDateTime(date), text: formatTime(date) }),
     ]);
     if (deletable && !m.pending) {
-      const btn = el('button', { class: 'msg-del', type: 'button', 'aria-label': 'Nachricht löschen', title: 'Löschen' }, [svgIcon(TRASH_ICON)]);
+      const btn = el('button', { class: 'msg-del', type: 'button', 'aria-label': t('chat.deleteLabel'), title: t('chat.delete') }, [svgIcon(TRASH_ICON)]);
       btn.addEventListener('click', () => removeMessage(m));
       meta.append(btn);
     }
 
     const bubble = el('div', { class: 'bubble' }, [
-      el('div', { class: 'msg-name', text: m.name || 'Unbekannt' }),
+      el('div', { class: 'msg-name', text: m.name || t('chat.unknownSender') }),
       el('div', { class: 'msg-text', text: m.text }),
       meta,
     ]);
@@ -208,9 +209,9 @@ export function createChat(session) {
     for (const id of nodeCache.keys()) if (!messages.has(id)) nodeCache.delete(id);
 
     empty.hidden = sorted.length > 0 || waitingForServer;
-    if (loadingOlder) topLine.textContent = 'Ältere Nachrichten werden geladen';
+    if (loadingOlder) topLine.textContent = t('chat.loadingOlder');
     else if (hasMore) topLine.textContent = '';
-    else topLine.textContent = sorted.length > 0 ? 'Anfang des Chats' : '';
+    else topLine.textContent = sorted.length > 0 ? t('chat.start') : '';
 
     const newest = sorted[sorted.length - 1];
     const newestChanged = newest && newest.id !== newestId;
@@ -241,12 +242,12 @@ export function createChat(session) {
   // ---------- actions ----------
 
   async function removeMessage(m) {
-    if (!confirm('Diese Nachricht löschen?')) return;
+    if (!confirm(t('chat.confirmDelete'))) return;
     try {
       await deleteDoc(doc(messagesRef, m.id));
     } catch (err) {
       console.warn('Delete failed', err.code);
-      toast('Löschen hat nicht geklappt.');
+      toast(t('chat.deleteFailed'));
     }
   }
 
@@ -255,7 +256,7 @@ export function createChat(session) {
     const ok = roomReady && input.value.trim().length > 0 && length <= MAX_LENGTH;
     sendBtn.disabled = !ok;
     counter.hidden = length < COUNTER_FROM;
-    counter.textContent = `${length} von ${MAX_LENGTH} Zeichen`;
+    counter.textContent = t('chat.counter', { n: length, max: MAX_LENGTH });
     counter.classList.toggle('over', length > MAX_LENGTH);
     input.style.height = 'auto';
     input.style.height = `${Math.min(input.scrollHeight + 2, 160)}px`;
@@ -278,7 +279,7 @@ export function createChat(session) {
       });
     } catch (err) {
       console.warn('Send failed', err.code);
-      toast('Senden hat nicht geklappt. Bitte erneut versuchen.');
+      toast(t('chat.sendFailed'));
       if (!input.value) { input.value = text; updateComposer(); }
     }
   }
@@ -289,7 +290,7 @@ export function createChat(session) {
       const snap = await getDoc(roomRef);
       if (!snap.exists()) {
         if (!session.isAdmin) {
-          notice.textContent = 'Der Chat wird eingerichtet, sobald ein Admin FamilyHub öffnet.';
+          notice.textContent = t('chat.notReady');
           notice.hidden = false;
           return;
         }

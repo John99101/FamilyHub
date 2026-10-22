@@ -1,12 +1,14 @@
 // Firestore storage for the market data (Admin SDK, so security rules do not
 // apply here; the rules only let family members read these documents).
 //
-//   config/market          { enabled }                     on/off switch (admins, in the app; missing = on)
+//   config/market          { enabled, aiEnabled }          on/off switches (admins, in the app; missing = on)
 //   config/watchlist       { symbols: [..] }               family watchlist (members, in the app)
 //   market/latest          { updatedAt, quotes, indices, extras, quotesUpdatedAt }
 //   market/status          { state, pausedUntil, callsUsed, callsRemaining, resetAt, ... }
 //   market/calendar        { holidays: [...], fetchedAt }
-//   marketHistory/{symbol} { symbol, closes: { 'YYYY-MM-DD': price } }
+//   market/risk            { asOf, symbols: [...], portfolio, ... }   risk figures (computed in code)
+//   market/riskSummary     { asOf, en, fr, model, ... }             daily AI summary
+//   marketHistory/{symbol} { symbol, closes: { 'YYYY-MM-DD': price } } (watchlist and $SPX)
 import { trimCloses } from './market.js';
 
 const toDate = (v) => (v && typeof v.toDate === 'function' ? v.toDate() : v ? new Date(v) : null);
@@ -62,6 +64,32 @@ export function createFirestoreStore(db) {
         const closes = { ...(snap.exists ? snap.data().closes : {}), ...entries };
         tx.set(ref, { symbol, closes: trimCloses(closes) });
       });
+    },
+
+    /** symbol → closes map, for every requested symbol (empty map when none stored). */
+    async getHistories(symbols) {
+      const out = {};
+      if (!symbols.length) return out;
+      const snaps = await db.getAll(...symbols.map((s) => db.doc(`marketHistory/${s}`)));
+      snaps.forEach((snap, i) => { out[symbols[i]] = snap.exists ? (snap.data().closes || {}) : {}; });
+      return out;
+    },
+
+    async getRisk() {
+      return read('market/risk');
+    },
+
+    async saveRisk(report) {
+      await db.doc('market/risk').set(report);
+    },
+
+    async getRiskSummary() {
+      return read('market/riskSummary');
+    },
+
+    /** Merges, so a failed attempt keeps the last good summary visible. */
+    async saveRiskSummary(fields) {
+      await db.doc('market/riskSummary').set(fields, { merge: true });
     },
   };
 }

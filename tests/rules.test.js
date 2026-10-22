@@ -83,6 +83,8 @@ beforeEach(async () => {
     await setDoc(doc(db, 'secrets', 'x'), { a: 1 });
     await setDoc(doc(db, 'market', 'latest'), { updatedAt: Timestamp.now(), quotes: [{ symbol: 'AAPL', price: 1 }], indices: [] });
     await setDoc(doc(db, 'market', 'status'), { state: 'ok' });
+    await setDoc(doc(db, 'market', 'risk'), { asOf: '2026-10-21', symbols: [] });
+    await setDoc(doc(db, 'market', 'riskSummary'), { asOf: '2026-10-21', en: 'note', fr: 'note' });
     await setDoc(doc(db, 'marketHistory', 'AAPL'), { symbol: 'AAPL', closes: { '2026-10-21': 1 } });
     await setDoc(doc(db, 'config', 'watchlist'), { symbols: ['AAPL'] });
     await setDoc(doc(db, 'config', 'market'), { enabled: false });
@@ -158,6 +160,25 @@ describe('markets', () => {
     await assertFails(change(ADMIN, 'yes'));
     await assertFails(change(ADMIN, true, { extra: 1 }));
     await assertFails(deleteDoc(doc(dbAs(ADMIN), 'config', 'market')));
+  });
+
+  it('only admins can switch the AI summary on or off (a true or false value)', async () => {
+    const change = (user, aiEnabled) => setDoc(doc(dbAs(user), 'config', 'market'), {
+      enabled: true, aiEnabled, updatedAt: serverTimestamp(), updatedBy: user.email,
+    });
+    await assertSucceeds(change(ADMIN, false));
+    await assertSucceeds(change(ADMIN, true));
+    await assertFails(change(ADMIN, 'off'));
+    await assertFails(change(MEMBER, false));
+  });
+
+  it('members read the risk figures and the AI summary but cannot write them', async () => {
+    for (const id of ['risk', 'riskSummary']) {
+      await assertSucceeds(getDoc(doc(dbAs(MEMBER), 'market', id)));
+      await assertFails(getDoc(doc(dbAs(STRANGER), 'market', id)));
+      await assertFails(setDoc(doc(dbAs(ADMIN), 'market', id), { en: 'fake' }));
+      await assertFails(updateDoc(doc(dbAs(MEMBER), 'market', id), { en: 'fake' }));
+    }
   });
 });
 
