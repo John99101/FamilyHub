@@ -11,8 +11,9 @@ export const firebaseConfig = {
   authDomain: 'familyhub-5355f.firebaseapp.com',
   projectId: 'familyhub-5355f',
   storageBucket: 'familyhub-5355f.firebasestorage.app',
-  messagingSenderId: '1:264183809855:web:e3c2a844c297b1a239358a',
-  appId: 'G-KBFDN7XT6X',
+  messagingSenderId: '264183809855',
+  appId: '1:264183809855:web:e3c2a844c297b1a239358a',
+  // measurementId (G-...) is left out on purpose: the app does not use Google Analytics.
 };
 
 // App Check with reCAPTCHA Enterprise (SETUP.md, step 6).
