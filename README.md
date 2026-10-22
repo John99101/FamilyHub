@@ -158,7 +158,7 @@ tests/rules.test.js     security rules tests (Firestore emulator)
 scripts/serve-local.mjs local web server with the same headers (for testing)
 scripts/make-icons.mjs  draws the icons
 firebase.json           Hosting, headers, Firestore, Functions, emulators
-.firebaserc             project ID (placeholder until you set it)
+.firebaserc             project ID (familyhub-5355f)
 firestore.rules         security rules
 firestore.indexes.json  index settings (no composite indexes needed)
 SETUP.md                step by step setup for the owner

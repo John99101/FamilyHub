@@ -8,9 +8,9 @@
 // firestore.rules, and App Check.
 export const firebaseConfig = {
   apiKey: 'HIER_EINFUEGEN',
-  authDomain: 'familyhub-platzhalter.firebaseapp.com',
-  projectId: 'familyhub-platzhalter',
-  storageBucket: 'familyhub-platzhalter.firebasestorage.app',
+  authDomain: 'familyhub-5355f.firebaseapp.com',
+  projectId: 'familyhub-5355f',
+  storageBucket: 'familyhub-5355f.firebasestorage.app',
   messagingSenderId: 'HIER_EINFUEGEN',
   appId: 'HIER_EINFUEGEN',
 };

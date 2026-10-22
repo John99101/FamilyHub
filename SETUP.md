@@ -9,9 +9,12 @@ You need: a Google account, a credit card for the Google billing account
 (the app is expected to cost nothing or a few cents per month), and this
 folder on your computer.
 
-Placeholders used below:
+Your Firebase project ID is **`familyhub-5355f`**. It is already filled in
+everywhere in this guide and in the files `.firebaserc` and
+`public/js/firebase-config.js`.
 
-- `<project-id>`: the ID of your new Firebase project (you get it in step 1).
+Placeholder used below:
+
 - `<your-mail>`: the Gmail address you sign in with, written in lower case.
 
 ---
@@ -23,8 +26,7 @@ Placeholders used below:
 1. Open https://console.firebase.google.com and sign in.
 2. Click **Create a Firebase project** (or **Add project**).
 3. Enter a name, for example `FamilyHub`. Under the name you see the
-   **project ID** (for example `familyhub-a1b2c`). Write it down: this is
-   your `<project-id>`. Click **Continue**.
+   **project ID**. (Done: yours is `familyhub-5355f`.) Click **Continue**.
 4. Google Analytics: switch it **off** (not needed). Click **Create project**,
    wait, then **Continue**.
 
@@ -52,10 +54,9 @@ to NGN Market; the free amounts still apply)
 Note: a budget alert only sends mail; it does not stop anything. Section 7
 explains how to switch the market part off.
 
-**Tell me the project ID** (or do it yourself): the placeholder
-`familyhub-platzhalter` appears in `.firebaserc` and in
-`public/js/firebase-config.js`. The config file gets replaced completely in
-step 2 anyway; `firebase use` in step 5 takes care of `.firebaserc`.
+The project ID `familyhub-5355f` is already set in `.firebaserc` and in
+`public/js/firebase-config.js`. Only three values from step 2 are still
+missing there.
 
 ---
 
@@ -85,9 +86,13 @@ step 2 anyway; `firebase use` in step 5 takes care of `.firebaserc`.
 2. App nickname: `FamilyHub Web`. Leave **Also set up Firebase Hosting**
    unticked. Click **Register app**.
 3. You see a code block with `const firebaseConfig = { apiKey: ..., ... }`.
-   Copy the six values (apiKey, authDomain, projectId, storageBucket,
-   messagingSenderId, appId) into `public/js/firebase-config.js`, replacing
-   `HIER_EINFUEGEN` and the placeholder names. Keep the quotes.
+   Open `public/js/firebase-config.js` and replace the three
+   `HIER_EINFUEGEN` with the values for **apiKey**, **messagingSenderId** and
+   **appId**. Keep the quotes. Check that authDomain, projectId and
+   storageBucket in the console match the ones already in the file
+   (`familyhub-5355f...`); if the console shows a different storageBucket, use
+   the console's value. (Or paste the whole block into the chat and I fill it
+   in: these values are not secret, see below.)
 4. Click **Continue to console**.
 
 **Why the web config is not secret:** these values only tell the browser which
@@ -109,7 +114,7 @@ only in Secret Manager (step 3).
      Then generate a fresh one.
 3. Open PowerShell in this folder (`D:\Dev_Ing\FamilyHub`). This command needs
    the CLI login, so if you have not done it yet, first run the two commands
-   `firebase login` and `firebase use <project-id>` from step 5. Then:
+   `firebase login` and `firebase use familyhub-5355f` from step 5. Then:
 
    ```
    firebase functions:secrets:set NGN_API_KEY
@@ -182,7 +187,7 @@ firebase login
 A browser window opens; sign in with the Google account that owns the project.
 
 ```
-firebase use <project-id>
+firebase use familyhub-5355f
 ```
 
 ```
@@ -204,8 +209,8 @@ During the first deploy:
   and keep the suggested 1 day. This keeps storage (and cost) near zero.
 - If it says the secret NGN_API_KEY is missing, do step 3 first.
 
-At the end it prints **Hosting URL**: `https://<project-id>.web.app`.
-Both `https://<project-id>.web.app` and `https://<project-id>.firebaseapp.com`
+At the end it prints **Hosting URL**: `https://familyhub-5355f.web.app`.
+Both `https://familyhub-5355f.web.app` and `https://familyhub-5355f.firebaseapp.com`
 work. **Share the `firebaseapp.com` address with the family**: on phones,
 especially iPhones and the installed app, Google sign in works most reliably
 there.
@@ -232,7 +237,7 @@ code is ready; it stays off until you paste a site key.
 1. Open https://console.cloud.google.com/security/recaptcha (select your
    project at the top). If asked, click **Enable** for the reCAPTCHA API.
 2. Click **Create key**. Display name: `FamilyHub`. Platform: **Website**.
-3. Domains: add `<project-id>.web.app` and `<project-id>.firebaseapp.com`.
+3. Domains: add `familyhub-5355f.web.app` and `familyhub-5355f.firebaseapp.com`.
 4. Leave the checkbox challenge **off** (score based key). **Create key**.
 5. Copy the **key ID** (a long string starting with `6L`).
 
