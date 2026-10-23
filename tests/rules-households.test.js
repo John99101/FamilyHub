@@ -105,6 +105,23 @@ describe('colors', () => {
     await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'colors', 'red')));
   });
 
+  it('a stuck color (its holder\'s profile shows another color) can be freed by any member', async () => {
+    await seed(async (db) => {
+      await setDoc(doc(db, 'colors', 'blue'), { uid: BEN.uid });   // Ben holds red in his profile
+      await setDoc(doc(db, 'colors', 'gold'), { uid: 'u_nobody' }); // holder without a profile
+    });
+    await assertSucceeds(deleteDoc(doc(dbAs(ANNA), 'colors', 'blue')));
+    await assertSucceeds(deleteDoc(doc(dbAs(ANNA), 'colors', 'gold')));
+    await assertFails(deleteDoc(doc(dbAs(ANNA), 'colors', 'red'))); // in use by Ben
+    await assertFails(deleteDoc(doc(dbAs(STRANGER), 'colors', 'red')));
+  });
+
+  it('someone who holds two colors gives the extra one back and keeps theirs', async () => {
+    await seed((db) => setDoc(doc(db, 'colors', 'teal'), { uid: BEN.uid }));
+    await assertSucceeds(deleteDoc(doc(dbAs(BEN), 'colors', 'teal')));
+    await assertFails(deleteDoc(doc(dbAs(BEN), 'colors', 'red')));
+  });
+
   it('everyone in the family sees who holds which color', async () => {
     await assertSucceeds(getDocs(collection(dbAs(ANNA), 'colors')));
     await assertFails(getDocs(collection(dbAs(STRANGER), 'colors')));

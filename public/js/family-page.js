@@ -48,7 +48,9 @@ export function createFamilyPage(data) {
       toast(t('family.colorSaved'));
     } catch (err) {
       console.warn('Changing the color failed', err.code);
-      toast(t('family.colorGone'));
+      // Only say "taken" when someone else really holds it now; otherwise the server refused the change.
+      const holder = data.state.colors[color];
+      toast(holder && holder !== session.user.uid ? t('family.colorGone') : t('family.colorFailed'));
     } finally {
       busy = false;
     }
@@ -164,8 +166,17 @@ export function createFamilyPage(data) {
     }
   }
 
+  // Shown when the server refuses colors, nicknames or households: its security
+  // rules are older than the app (the new rules were not published yet).
+  function rulesNotice() {
+    if (!data.state.rulesOutdated) return null;
+    return el('section', { class: 'card card-warning', role: 'status' }, [
+      el('p', { text: session.isAdmin ? t('family.rulesOutdatedAdmin') : t('family.rulesOutdated') }),
+    ]);
+  }
+
   function render() {
-    root.replaceChildren(colorCard(), peopleCard(), householdsCard());
+    root.replaceChildren(...[rulesNotice(), colorCard(), peopleCard(), householdsCard()].filter(Boolean));
   }
 
   let visible = false;

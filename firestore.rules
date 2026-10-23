@@ -167,6 +167,12 @@ service cloud.firestore {
           || get(/databases/$(database)/documents/people/$(uid)).data.mail in accessList().admins);
     }
 
+    // A lock nobody uses: its holder has no profile, or the profile shows another color.
+    function stuckColor(holder, color) {
+      return !exists(/databases/$(database)/documents/people/$(holder))
+        || get(/databases/$(database)/documents/people/$(holder)).data.get('color', '') != color;
+    }
+
     match /colors/{color} {
       allow read: if isMember();
       allow create: if isMember()
@@ -174,11 +180,13 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['uid'])
         && request.resource.data.uid == request.auth.uid
         && getAfter(/databases/$(database)/documents/people/$(request.auth.uid)).data.get('color', '') == color;
-      // Give a color back (when changing it), or an admin frees the color of
-      // someone who is no longer on the allow list.
+      // Give a color back (when changing it); free a stuck color (its holder's
+      // profile shows another color, so nobody uses it: any member's app may
+      // clean it up); or an admin frees the color of someone no longer on the list.
       allow delete: if isMember()
         && ((resource.data.uid == request.auth.uid
             && getAfter(/databases/$(database)/documents/people/$(request.auth.uid)).data.get('color', '') != color)
+          || stuckColor(resource.data.uid, color)
           || (isAdmin() && !stillListed(resource.data.uid)));
     }
 

@@ -21,7 +21,7 @@ import { createContacts } from './contacts.js';
 import { createWeather } from './weather.js';
 import { createFamilyPage } from './family-page.js';
 
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.3.1';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();

@@ -76,3 +76,7 @@
 .msg-name { color: color-mix(in srgb, var(--pc, var(--primary)) 80%, var(--text)); }
 .avatar.colored { background: var(--pc); color: #fff; }
 img.avatar.colored { box-shadow: 0 0 0 2px var(--pc); }
+
+/* Note when the server rules are older than the app. */
+.card-warning { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, var(--surface)); }
+.card-warning p { margin: 0; font-weight: 600; }

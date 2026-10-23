@@ -7,10 +7,10 @@
 // row carries `household` ('' for the whole family) and `path` (where it is
 // stored), so the pages can show, filter and change them.
 import {
-  db, collection, doc, query, where, orderBy, limit, onSnapshot, setDoc, writeBatch, serverTimestamp,
+  db, collection, doc, query, where, orderBy, limit, onSnapshot, setDoc, deleteDoc, writeBatch, serverTimestamp,
 } from './firebase.js';
 import { todayIso, addDays } from './dates.js';
-import { COLOR_IDS, hexOf, NEUTRAL } from './colors.js';
+import { hexOf, NEUTRAL, planColorWork } from './colors.js';
 
 export const MAIN_ROOM = 'familie';
 // Multi day entries may start up to this many days before the day shown.
@@ -40,6 +40,7 @@ export function createFamilyData(session) {
     digest: null,    // the family's weekly overview
     householdDigests: {}, // household id → its weekly overview
     digestSwitch: null,
+    rulesOutdated: false, // the server refused colors, nicknames or households
     loaded: {},
   };
   const listeners = new Set();
@@ -182,40 +183,75 @@ export function createFamilyData(session) {
       .catch((err) => console.warn('Saving the profile failed', err.code));
   }
 
-  /** Takes a color: frees the old one and writes the lock and the profile together. */
+  /** Takes a color: frees the old one(s) and writes the lock and the profile together. */
   async function setMyColor(color) {
-    const old = me()?.color;
     const batch = writeBatch(db);
-    if (old && old !== color && state.colors[old] === uid) batch.delete(doc(db, 'colors', old));
+    for (const [c, holder] of Object.entries(state.colors)) {
+      if (holder === uid && c !== color) batch.delete(doc(db, 'colors', c));
+    }
     batch.set(doc(db, 'colors', color), { uid });
     batch.set(doc(db, 'people', uid), { ...profileFields(), color }, { merge: true });
     await batch.commit();
   }
 
-  // The first time, everyone gets the first free color.
-  let colorTries = 0;
+  // Keeps exactly one color for this person: the first free one the first
+  // time, its own color written back if the profile lost it, extra colors
+  // given back, and colors stuck with others (their profile shows another
+  // color) freed. Runs only on data the server has confirmed and never twice
+  // at the same time, so it cannot take two colors in a row.
+  const sync = {};            // key → { pending, cache } of the last snapshot
+  let colorBusy = false;
+  let takeTries = 0;
+  const orphansTried = new Set();
+
   async function ensureColor() {
-    if (!state.loaded.people || !state.loaded.colors || colorTries >= 3) return;
-    const p = me();
-    if (p && p.color && state.colors[p.color] === uid) return;
-    const free = COLOR_IDS.find((c) => !state.colors[c]);
-    if (!free) return; // all 16 taken: this person stays grey
-    colorTries += 1;
+    if (colorBusy || !state.loaded.people || !state.loaded.colors) return;
+    if (['people', 'colors'].some((k) => !sync[k] || sync[k].pending || sync[k].cache)) return;
+    const plan = planColorWork({ uid, people: state.people, colors: state.colors });
+    const orphans = plan.orphans.filter((c) => !orphansTried.has(c));
+    if (!plan.take && !plan.repair && !plan.release.length && !orphans.length) return;
+    colorBusy = true;
     try {
-      await setMyColor(free);
+      if (plan.repair || plan.release.length) {
+        const batch = writeBatch(db);
+        if (plan.repair) batch.set(doc(db, 'people', uid), { ...profileFields(), color: plan.repair }, { merge: true });
+        for (const c of plan.release) batch.delete(doc(db, 'colors', c));
+        await batch.commit();
+      } else if (plan.take && takeTries < 3) {
+        takeTries += 1;
+        await setMyColor(plan.take);
+      }
+      // Stuck colors of others: the rules only allow this when the owner's profile shows another color.
+      for (const c of orphans) {
+        orphansTried.add(c);
+        await deleteDoc(doc(db, 'colors', c)).catch((err) => console.warn('Freeing a stuck color failed', c, err.code));
+      }
     } catch (err) {
-      console.warn('Taking a color failed', err.code); // someone took it a moment earlier; the next update tries again
+      console.warn('Keeping the color failed', err.code);
+    } finally {
+      colorBusy = false;
     }
   }
 
   // ---------- start ----------
 
-  const watchList = (key, ref, map, after) => onSnapshot(ref, (snap) => {
+  // Collections the newest security rules are needed for: if the server refuses
+  // them, the rules on the server are older than the app (see the Family page).
+  const NEEDS_NEW_RULES = new Set(['colors', 'nicknames', 'households']);
+
+  const watchList = (key, ref, map, after) => onSnapshot(ref, { includeMetadataChanges: key === 'people' || key === 'colors' }, (snap) => {
     state[key] = map(snap);
     state.loaded[key] = true;
+    sync[key] = { pending: snap.metadata.hasPendingWrites, cache: snap.metadata.fromCache };
     if (after) after();
     notify();
-  }, onError(key));
+  }, (err) => {
+    console.warn(`Reading ${key} failed`, err.code);
+    if (err.code === 'permission-denied' && NEEDS_NEW_RULES.has(key)) {
+      state.rulesOutdated = true;
+      notify();
+    }
+  });
   const plain = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
   const single = (snap) => (snap.exists() ? { id: snap.id, ...snap.data({ serverTimestamps: 'estimate' }) } : null);
 

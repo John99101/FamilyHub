@@ -367,6 +367,20 @@ holidays. The switch is in the app (admins only): **Einstellungen** →
   household sees any of it, admins included; to look inside, an admin has to
   add themselves. Deleting a household deletes everything in it.
 
+**If colors cannot be chosen** (every color seems taken, or saving fails)
+
+The server's security rules are probably older than the app (for example
+only the website was deployed, or the first deploy stopped at the functions
+step). Admins then see a note on the **Familie** page. Publish the rules:
+
+```
+firebase deploy --only firestore
+```
+
+To check: Firebase console → **Firestore Database** → tab **Rules**: the text
+must contain `match /colors/{color}`. Colors that got stuck earlier are freed
+automatically the next time anyone opens the app.
+
 **The weekly overview** (Start page)
 
 - Every Sunday at 17:00 Berlin time the server collects the coming week
