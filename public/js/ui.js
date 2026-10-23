@@ -103,3 +103,48 @@ export function dayLabel(date, now = new Date()) {
   if (diffDays === 1) return t('day.yesterday');
   return (date.getFullYear() === now.getFullYear() ? dayFormat : dayYearFormat).format(date);
 }
+
+// ---------- calendar days in the chosen language ('YYYY-MM-DD', shown as that day) ----------
+
+const utcDay = (iso) => new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))));
+const weekdayDayFormat = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+const weekdayShortFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+const monthTitleFormat = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const weekdayNameFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' });
+const dayMonthFormat = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', timeZone: 'UTC' });
+
+/** "Dienstag, 27. Oktober" / "Tuesday 27 October" / "mardi 27 octobre". */
+export const formatWeekdayDay = (iso) => weekdayDayFormat.format(utcDay(iso));
+/** "Di., 27. Okt." */
+export const formatWeekdayShort = (iso) => weekdayShortFormat.format(utcDay(iso));
+/** "27. Oktober" (birthdays, without the year). */
+export const formatDayMonth = (iso) => dayMonthFormat.format(utcDay(iso));
+/** "Oktober 2026" for 'YYYY-MM'. */
+export const formatMonth = (month) => monthTitleFormat.format(utcDay(`${month}-01`));
+/** Short weekday names, Monday first. */
+export const weekdayNames = () => Array.from({ length: 7 }, (_, i) => weekdayNameFormat.format(new Date(Date.UTC(2026, 9, 26 + i))));
+
+/** "heute", "morgen", "in 5 Tagen", "vor 2 Tagen" for a number of days from today. */
+export function relativeDays(n) {
+  if (n === 0) return t('day.today');
+  if (n === 1) return t('day.tomorrow');
+  if (n === -1) return t('day.yesterday');
+  return n > 1 ? t('day.inDays', { n }) : t('day.daysAgo', { n: -n });
+}
+
+// ---------- page parts ----------
+
+/** A card with a heading and an optional button or link on the right. */
+export function card(title, children, { action, className = '' } = {}) {
+  const head = el('div', { class: 'card-head' }, [el('h2', { text: title }), action || null]);
+  return el('section', { class: `card ${className}`.trim() }, [head, ...[].concat(children)]);
+}
+
+export const emptyNote = (text) => el('p', { class: 'empty-note', text });
+
+/** Small round button with a plus, for "add" actions in card heads. */
+export function addButton(label, onClick) {
+  return el('button', { class: 'btn btn-small btn-primary', type: 'button', onclick: onClick }, [
+    svgIcon(['M12 5v14', 'M5 12h14']), el('span', { text: label }),
+  ]);
+}

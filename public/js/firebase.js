@@ -6,8 +6,9 @@ import {
   getRedirectResult, onAuthStateChanged, signOut,
 } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js';
 import {
-  getFirestore, connectFirestoreEmulator, doc, collection, query, orderBy, limit,
-  onSnapshot, getDoc, setDoc, addDoc, deleteDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove,
+  getFirestore, connectFirestoreEmulator, doc, collection, query, where, orderBy, limit,
+  onSnapshot, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc, writeBatch, serverTimestamp,
+  arrayUnion, arrayRemove, deleteField,
 } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-app-check.js';
 import { firebaseConfig, recaptchaEnterpriseSiteKey } from './firebase-config.js';
@@ -42,6 +43,6 @@ if (isLocal) {
 
 export {
   GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut,
-  doc, collection, query, orderBy, limit, onSnapshot, getDoc, setDoc, addDoc, deleteDoc, updateDoc,
-  serverTimestamp, arrayUnion, arrayRemove,
+  doc, collection, query, where, orderBy, limit, onSnapshot, getDoc, getDocs, setDoc, addDoc, deleteDoc, updateDoc,
+  writeBatch, serverTimestamp, arrayUnion, arrayRemove, deleteField,
 };

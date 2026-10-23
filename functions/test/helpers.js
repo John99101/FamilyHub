@@ -77,6 +77,13 @@ export function memoryStore(initial = {}) {
     history: {},
     risk: null,
     riskSummary: null,
+    digestSwitch: null, // never set = on
+    digest: null,
+    events: [],
+    tasks: [],
+    polls: [],
+    people: [],
+    weekQueries: [],
     ...initial,
   };
   return {
@@ -99,6 +106,18 @@ export function memoryStore(initial = {}) {
     async saveRisk(r) { state.risk = structuredClone(r); },
     async getRiskSummary() { return state.riskSummary ? structuredClone(state.riskSummary) : null; },
     async saveRiskSummary(fields) { state.riskSummary = { ...(state.riskSummary || {}), ...structuredClone(fields) }; },
+    async getDigestSwitch() { return state.digestSwitch; },
+    // Same filters as the Firestore queries in firestore-store.js.
+    async getFamilyWeekData({ from, to }) {
+      state.weekQueries.push({ from, to });
+      return structuredClone({
+        events: state.events.filter((e) => e.repeat === 'yearly' || (e.date >= from && e.date <= to)),
+        tasks: state.tasks.filter((t) => t.done === false),
+        polls: state.polls.filter((p) => p.closed === false),
+        people: state.people,
+      });
+    },
+    async saveDigest(fields) { state.digest = { ...(state.digest || {}), ...structuredClone(fields) }; },
   };
 }
 

@@ -272,7 +272,7 @@ describe('members in the chat', () => {
     await assertFails(addDoc(collection(db, 'rooms', 'geheim', 'messages'), messageFrom(MEMBER)));
   });
 
-  it('member cannot create rooms or change the allow list', async () => {
+  it('member cannot create a room without the room fields or change the allow list', async () => {
     const db = dbAs(MEMBER);
     await assertFails(setDoc(doc(db, 'rooms', 'neu'), { name: 'Neu', createdAt: serverTimestamp() }));
     await assertFails(updateDoc(doc(db, 'config', 'access'), {
@@ -387,9 +387,11 @@ describe('admins', () => {
     await assertFails(deleteDoc(doc(dbAs(ADMIN), 'config', 'access')));
   });
 
-  it('admin can create a room with a valid name', async () => {
-    const db = dbAs(ADMIN);
-    await assertSucceeds(setDoc(doc(db, 'rooms', 'urlaub'), { name: 'Urlaub', createdAt: serverTimestamp() }));
-    await assertFails(setDoc(doc(db, 'rooms', 'leer'), { name: '', createdAt: serverTimestamp() }));
+  it('only an admin sets up the main room "familie" (other rooms need the full room fields)', async () => {
+    await env.withSecurityRulesDisabled((ctx) => deleteDoc(doc(ctx.firestore(), 'rooms', 'familie')));
+    await assertFails(setDoc(doc(dbAs(MEMBER), 'rooms', 'familie'), { name: 'Familie', createdAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(dbAs(ADMIN), 'rooms', 'familie'), { name: '', createdAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(dbAs(ADMIN), 'rooms', 'familie'), { name: 'Familie', createdAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(dbAs(ADMIN), 'rooms', 'urlaub'), { name: 'Urlaub', createdAt: serverTimestamp() }));
   });
 });

@@ -1,15 +1,20 @@
-// Family chat: one room ("Familie"), live updates, older messages in pages of 50.
+// Family chat: rooms (the main room "Familie" plus rooms for everyone or for
+// chosen people), live updates, older messages in pages of 50, replies,
+// reactions, and "new" markers per room.
 //
-// How loading works: one live listener watches the newest N messages
-// (N starts at 50). Scrolling to the top raises N by 50 and restarts the
-// listener, so every message on screen stays live (deletions included).
+// How loading works: one live listener watches the newest N messages of the
+// open room (N starts at 50). Scrolling to the top raises N by 50 and
+// restarts the listener, so every message on screen stays live.
 import {
-  db, collection, doc, query, orderBy, limit, onSnapshot, getDoc, setDoc, addDoc, deleteDoc, serverTimestamp,
+  db, collection, doc, query, orderBy, limit, onSnapshot, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
+  writeBatch, serverTimestamp, arrayUnion, arrayRemove,
 } from './firebase.js';
 import { $, el, avatar, svgIcon, TRASH_ICON, toast, formatTime, formatDateTime, dayKey, dayLabel } from './ui.js';
 import { t } from './i18n.js';
+import { MAIN_ROOM, canEdit, createdFields, firstName, toDate } from './family-data.js';
+import { openForm, openDialog } from './dialog.js';
 
-export const ROOM_ID = 'familie';
+export const ROOM_ID = MAIN_ROOM;
 const ROOM_NAME = 'Familie';
 const PAGE_SIZE = 50;
 export const MAX_LENGTH = 2000;
@@ -17,8 +22,27 @@ const COUNTER_FROM = 1800;
 const GROUP_GAP_MS = 5 * 60 * 1000;
 const NEAR_BOTTOM_PX = 120;
 const LOAD_OLDER_PX = 150;
+const ROOM_KEY = 'familyhub-room';
+const SEEN_KEY = 'familyhub-seen';
+const MORE_ICON = ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'];
+const REPLY_ICON = ['m9 14-5-5 5-5', 'M4 9h10a6 6 0 0 1 6 6v4'];
 
-export function createChat(session) {
+export const REACTIONS = [
+  ['like', '👍'], ['love', '❤️'], ['laugh', '😂'], ['wow', '😮'], ['sad', '😢'], ['thanks', '🙏'],
+];
+
+// ---------- "new" markers: when each room was last looked at (this device only) ----------
+
+function loadSeen() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SEEN_KEY) || 'null');
+    if (saved && typeof saved === 'object') return saved;
+  } catch { /* storage blocked */ }
+  // First start on this device: everything before now counts as seen.
+  return { _since: Date.now() };
+}
+
+export function createChat(session, data) {
   const scrollBox = $('chat-scroll');
   const list = $('chat-messages');
   const topLine = $('chat-top');
@@ -29,11 +53,17 @@ export function createChat(session) {
   const sendBtn = $('chat-send');
   const counter = $('chat-counter');
   const notice = $('chat-notice');
+  const roomList = $('room-list');
+  const replyBar = $('reply-bar');
+  const coarsePointer = matchMedia('(pointer: coarse)').matches;
+  const uid = session.user.uid;
 
-  const messagesRef = collection(db, 'rooms', ROOM_ID, 'messages');
+  let roomId = MAIN_ROOM;
+  try { roomId = localStorage.getItem(ROOM_KEY) || MAIN_ROOM; } catch { /* storage blocked */ }
+  let messagesRef = collection(db, 'rooms', roomId, 'messages');
   const messages = new Map(); // id -> message
   const nodeCache = new Map(); // id -> { key, node }
-  const coarsePointer = matchMedia('(pointer: coarse)').matches;
+  const seen = loadSeen();
 
   let windowSize = PAGE_SIZE;
   let unsubscribe = null;
@@ -45,6 +75,91 @@ export function createChat(session) {
   let stickToBottom = true;
   let roomReady = false;
   let stopped = false;
+  let visible = false;
+  let activeId = null; // message whose actions are open
+  let reply = null; // { id, name, text }
+
+  // ---------- rooms ----------
+
+  const currentRoom = () => data.state.rooms.find((r) => r.id === roomId) || null;
+  const lastMs = (room) => toDate(room?.last?.at)?.getTime() || 0;
+
+  function isUnread(room) {
+    if (!room || !room.last || room.last.uid === uid) return false;
+    return lastMs(room) > (seen[room.id] || seen._since || 0);
+  }
+
+  function markSeen() {
+    const room = currentRoom();
+    if (!visible || !room) return;
+    const ms = Math.max(lastMs(room), Date.now());
+    if ((seen[room.id] || 0) >= ms) return;
+    seen[room.id] = ms;
+    try { localStorage.setItem(SEEN_KEY, JSON.stringify(seen)); } catch { /* storage blocked */ }
+    renderRooms();
+  }
+
+  function renderRooms() {
+    const rooms = data.state.rooms;
+    roomList.replaceChildren(...rooms.map((r) => el('button', {
+      class: `room-chip ${isUnread(r) ? 'unread' : ''}`.trim(), type: 'button',
+      'aria-pressed': r.id === roomId ? 'true' : 'false',
+      onclick: () => openRoom(r.id),
+    }, [
+      r.open === false ? el('span', { class: 'room-lock', 'aria-label': t('rooms.closedRoom'), text: '🔒' }) : null,
+      el('span', { text: r.id === MAIN_ROOM ? t('rooms.main') : r.name }),
+    ])));
+    const anyUnread = rooms.some((r) => isUnread(r) && !(visible && r.id === roomId));
+    $('chat-dot').hidden = !anyUnread;
+    roomList.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  function openRoom(id) {
+    if (id === roomId && unsubscribe) { markSeen(); return; }
+    roomId = id;
+    try { localStorage.setItem(ROOM_KEY, id); } catch { /* storage blocked */ }
+    if (unsubscribe) unsubscribe();
+    unsubscribe = null;
+    messagesRef = collection(db, 'rooms', roomId, 'messages');
+    messages.clear();
+    nodeCache.clear();
+    list.replaceChildren();
+    windowSize = PAGE_SIZE;
+    hasMore = false;
+    loadingOlder = false;
+    firstRenderDone = false;
+    newestId = null;
+    stickToBottom = true;
+    activeId = null;
+    setReply(null);
+    pill.hidden = true;
+    topLine.textContent = '';
+    empty.hidden = true;
+    roomReady = false;
+    updateComposer();
+    subscribe();
+    ensureRoom();
+    renderRooms();
+    markSeen();
+  }
+
+  // When the rooms change: leave a room that was deleted or that this person is no longer in.
+  let roomsKnown = false;
+  function onRoomsChanged() {
+    if (!data.state.loaded.rooms) return;
+    const wasKnown = roomsKnown;
+    roomsKnown = true;
+    if (roomId !== MAIN_ROOM && !currentRoom()) {
+      // A room saved on this device from earlier is simply not opened again;
+      // a room that disappears while the app is open gets a short note.
+      if (wasKnown) toast(t('rooms.gone'));
+      openRoom(MAIN_ROOM);
+      return;
+    }
+    if (!roomReady && currentRoom()) ensureRoom();
+    renderRooms();
+    markSeen();
+  }
 
   // ---------- data ----------
 
@@ -55,14 +170,16 @@ export function createChat(session) {
 
   function toMessage(snap) {
     const d = snap.data({ serverTimestamps: 'estimate' });
-    const ms = timeOf(snap);
+    const r = d.replyTo && typeof d.replyTo === 'object' ? d.replyTo : null;
     return {
       id: snap.id,
       uid: d.uid,
       name: typeof d.name === 'string' ? d.name : '',
       photo: typeof d.photo === 'string' ? d.photo : '',
       text: typeof d.text === 'string' ? d.text : '',
-      ms,
+      replyTo: r && typeof r.id === 'string' ? { id: r.id, name: String(r.name || ''), text: String(r.text || '') } : null,
+      reactions: d.reactions && typeof d.reactions === 'object' ? d.reactions : {},
+      ms: timeOf(snap),
       pending: snap.metadata.hasPendingWrites,
     };
   }
@@ -71,7 +188,8 @@ export function createChat(session) {
     if (unsubscribe) unsubscribe();
     waitingForServer = true;
     const q = query(messagesRef, orderBy('createdAt', 'desc'), limit(windowSize));
-    unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, onData, onError);
+    const thisRoom = roomId;
+    unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snap) => { if (thisRoom === roomId) onData(snap); }, onError);
   }
 
   function onData(snap) {
@@ -105,11 +223,12 @@ export function createChat(session) {
 
     hasMore = full;
     render();
+    markSeen();
   }
 
   function onError(err) {
     console.warn('Chat listener error', err.code);
-    // Losing access is handled by the app (it shows "Kein Zugang").
+    // Losing access to the whole app is handled by app.js ("Kein Zugang").
     if (err.code !== 'permission-denied') toast(t('chat.unavailable'));
   }
 
@@ -152,13 +271,53 @@ export function createChat(session) {
   }
 
   function canDelete(m) {
-    return m.uid === session.user.uid || session.isAdmin;
+    return m.uid === uid || session.isAdmin;
+  }
+
+  function scrollToMessage(id) {
+    const cached = nodeCache.get(id);
+    if (!cached || !cached.node.isConnected) { toast(t('chat.originalNotLoaded')); return; }
+    cached.node.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    cached.node.classList.add('flash');
+    setTimeout(() => cached.node.classList.remove('flash'), 1400);
+  }
+
+  function reactionRow(m) {
+    const pills = [];
+    for (const [key, emoji] of REACTIONS) {
+      const who = Array.isArray(m.reactions[key]) ? m.reactions[key] : [];
+      if (!who.length) continue;
+      const mine = who.includes(uid);
+      const names = who.map((x) => (x === uid ? t('home.you') : firstName(data.nameForUid(x)) || '?')).join(', ');
+      pills.push(el('button', {
+        class: `reaction ${mine ? 'mine' : ''}`.trim(), type: 'button', 'aria-pressed': mine ? 'true' : 'false',
+        title: names, 'aria-label': `${emoji} ${who.length}: ${names}`,
+        onclick: () => toggleReaction(m, key),
+      }, [el('span', { text: emoji, 'aria-hidden': 'true' }), el('span', { text: String(who.length), 'aria-hidden': 'true' })]));
+    }
+    return pills.length ? el('div', { class: 'reactions' }, pills) : null;
+  }
+
+  function actionRow(m) {
+    const buttons = REACTIONS.map(([key, emoji]) => el('button', {
+      class: 'react-btn', type: 'button', 'aria-label': t(`chat.react.${key}`), title: t(`chat.react.${key}`),
+      onclick: () => { activeId = null; toggleReaction(m, key); render(); },
+    }, [el('span', { text: emoji, 'aria-hidden': 'true' })]));
+    buttons.push(el('button', {
+      class: 'act-btn', type: 'button', onclick: () => { activeId = null; setReply(m); render(); },
+    }, [svgIcon(REPLY_ICON), el('span', { text: t('chat.reply') })]));
+    if (canDelete(m)) {
+      buttons.push(el('button', {
+        class: 'act-btn danger', type: 'button', onclick: () => { activeId = null; render(); removeMessage(m); },
+      }, [svgIcon(TRASH_ICON), el('span', { text: t('chat.delete') })]));
+    }
+    return el('div', { class: 'msg-actions' }, buttons);
   }
 
   function messageNode(m, continued) {
-    const own = m.uid === session.user.uid;
-    const deletable = canDelete(m);
-    const key = [m.text, m.name, m.photo, m.pending, continued, deletable, Math.floor(m.ms / 60000)].join('|');
+    const own = m.uid === uid;
+    const active = activeId === m.id;
+    const key = [m.text, m.name, m.photo, m.pending, continued, canDelete(m), active, JSON.stringify(m.reactions), m.replyTo?.id, Math.floor(m.ms / 60000)].join('|');
     const cached = nodeCache.get(m.id);
     if (cached && cached.key === key) return cached.node;
 
@@ -168,14 +327,21 @@ export function createChat(session) {
         ? el('span', { text: t('chat.sending') })
         : el('time', { datetime: date.toISOString(), title: formatDateTime(date), text: formatTime(date) }),
     ]);
-    if (deletable && !m.pending) {
-      const btn = el('button', { class: 'msg-del', type: 'button', 'aria-label': t('chat.deleteLabel'), title: t('chat.delete') }, [svgIcon(TRASH_ICON)]);
-      btn.addEventListener('click', () => removeMessage(m));
-      meta.append(btn);
+    if (!m.pending) {
+      meta.append(el('button', {
+        class: 'msg-more', type: 'button', 'aria-label': t('chat.actions'), title: t('chat.actions'), 'aria-expanded': active ? 'true' : 'false',
+        onclick: () => { activeId = active ? null : m.id; render(); },
+      }, [svgIcon(MORE_ICON)]));
     }
+
+    const quote = m.replyTo ? el('button', { class: 'quote', type: 'button', onclick: () => scrollToMessage(m.replyTo.id) }, [
+      el('span', { class: 'quote-name', text: m.replyTo.name || t('chat.unknownSender') }),
+      el('span', { class: 'quote-text', text: m.replyTo.text }),
+    ]) : null;
 
     const bubble = el('div', { class: 'bubble' }, [
       el('div', { class: 'msg-name', text: m.name || t('chat.unknownSender') }),
+      quote,
       el('div', { class: 'msg-text', text: m.text }),
       meta,
     ]);
@@ -184,7 +350,8 @@ export function createChat(session) {
     if (own) classes.push('own');
     if (continued) classes.push('cont');
     if (m.pending) classes.push('pending');
-    const node = el('div', { class: classes.join(' '), 'data-id': m.id }, own ? [bubble] : [avatar(m.name, m.photo), bubble]);
+    const column = el('div', { class: 'msg-col' }, [bubble, reactionRow(m), active ? actionRow(m) : null]);
+    const node = el('div', { class: classes.join(' '), 'data-id': m.id }, own ? [column] : [avatar(m.name, m.photo), column]);
     nodeCache.set(m.id, { key, node });
     return node;
   }
@@ -220,7 +387,7 @@ export function createChat(session) {
     if (!firstRenderDone) {
       if (!waitingForServer || sorted.length) scrollToBottom();
       firstRenderDone = !waitingForServer;
-    } else if (newestChanged && newest.uid === session.user.uid) {
+    } else if (newestChanged && newest.uid === uid) {
       scrollToBottom();
     } else if (wasNearBottom) {
       scrollToBottom();
@@ -241,6 +408,16 @@ export function createChat(session) {
 
   // ---------- actions ----------
 
+  async function toggleReaction(m, key) {
+    const mine = Array.isArray(m.reactions[key]) && m.reactions[key].includes(uid);
+    try {
+      await updateDoc(doc(messagesRef, m.id), { [`reactions.${key}`]: mine ? arrayRemove(uid) : arrayUnion(uid) });
+    } catch (err) {
+      console.warn('Reaction failed', err.code);
+      toast(t('common.saveFailed'));
+    }
+  }
+
   async function removeMessage(m) {
     if (!confirm(t('chat.confirmDelete'))) return;
     try {
@@ -249,6 +426,14 @@ export function createChat(session) {
       console.warn('Delete failed', err.code);
       toast(t('chat.deleteFailed'));
     }
+  }
+
+  function setReply(m) {
+    reply = m ? { id: m.id, name: (m.name || '').slice(0, 100), text: m.text.replace(/\s+/g, ' ').trim().slice(0, 140) } : null;
+    replyBar.hidden = !reply;
+    $('reply-name').textContent = reply ? t('chat.replyTo', { name: reply.name || t('chat.unknownSender') }) : '';
+    $('reply-snippet').textContent = reply ? reply.text : '';
+    if (reply && !coarsePointer) input.focus({ preventScroll: true });
   }
 
   function updateComposer() {
@@ -265,27 +450,45 @@ export function createChat(session) {
   async function send() {
     const text = input.value.trim();
     if (!roomReady || !text || text.length > MAX_LENGTH) return;
+    const replyTo = reply;
     input.value = '';
+    setReply(null);
     updateComposer();
     stickToBottom = true;
+    const name = typeof session.claims.name === 'string' ? session.claims.name : '';
+    const message = {
+      uid,
+      // Must match what Google put into the sign in token (checked by the rules).
+      name,
+      photo: typeof session.claims.picture === 'string' ? session.claims.picture : '',
+      text,
+      createdAt: serverTimestamp(),
+    };
+    if (replyTo) message.replyTo = replyTo;
+    // The message and the room preview (newest message) are written together.
+    const batch = writeBatch(db);
+    batch.set(doc(messagesRef), message);
+    batch.update(doc(db, 'rooms', roomId), {
+      last: { uid, name, text: text.replace(/\s+/g, ' ').slice(0, 120), at: serverTimestamp() },
+    });
     try {
-      await addDoc(messagesRef, {
-        uid: session.user.uid,
-        // Must match what Google put into the sign in token (checked by the rules).
-        name: typeof session.claims.name === 'string' ? session.claims.name : '',
-        photo: typeof session.claims.picture === 'string' ? session.claims.picture : '',
-        text,
-        createdAt: serverTimestamp(),
-      });
+      await batch.commit();
     } catch (err) {
       console.warn('Send failed', err.code);
       toast(t('chat.sendFailed'));
       if (!input.value) { input.value = text; updateComposer(); }
+      if (replyTo && !reply) setReply({ id: replyTo.id, name: replyTo.name, text: replyTo.text });
     }
   }
 
   async function ensureRoom() {
-    const roomRef = doc(db, 'rooms', ROOM_ID);
+    if (roomId !== MAIN_ROOM) {
+      roomReady = !!currentRoom();
+      notice.hidden = true;
+      updateComposer();
+      return;
+    }
+    const roomRef = doc(db, 'rooms', MAIN_ROOM);
     try {
       const snap = await getDoc(roomRef);
       if (!snap.exists()) {
@@ -297,10 +500,101 @@ export function createChat(session) {
         await setDoc(roomRef, { name: ROOM_NAME, createdAt: serverTimestamp() });
       }
       notice.hidden = true;
-      roomReady = true;
+      if (roomId === MAIN_ROOM) roomReady = true;
       updateComposer();
     } catch (err) {
       console.warn('Room check failed', err.code);
+    }
+  }
+
+  // ---------- creating and changing rooms ----------
+
+  function roomFields(room = {}) {
+    const me = session.mail;
+    const people = data.family().map((p) => ({ value: p.mail, label: p.mail === me ? `${p.name} (${t('home.you')})` : p.name, locked: p.mail === me }));
+    return [
+      { name: 'name', type: 'text', label: t('rooms.name'), value: room.name || '', maxlength: 40, required: true },
+      { name: 'who', type: 'segmented', label: t('rooms.who'), value: room.open === false ? 'some' : 'all', options: [
+        { value: 'all', label: t('rooms.forAll') }, { value: 'some', label: t('rooms.forSome') },
+      ] },
+      { name: 'members', type: 'people', label: t('rooms.members'), value: room.members || [me], options: people, showIf: (v) => v.who === 'some' },
+      { name: 'hint', type: 'info', text: t('rooms.privacyHint') },
+    ];
+  }
+
+  function roomData(v) {
+    const open = v.who !== 'some';
+    const members = open ? [] : [...new Set([session.mail, ...v.members])];
+    return { name: v.name.trim(), open, members };
+  }
+
+  function openNewRoom() {
+    openForm({
+      title: t('rooms.new'),
+      fields: roomFields(),
+      submitLabel: t('rooms.create'),
+      onSubmit: async (v) => {
+        try {
+          const ref = await addDoc(collection(db, 'rooms'), { ...roomData(v), ...createdFields(session) });
+          toast(t('rooms.created'));
+          setTimeout(() => openRoom(ref.id), 0);
+          return undefined;
+        } catch (err) {
+          console.warn('Creating the room failed', err.code);
+          return t('common.saveFailed');
+        }
+      },
+    });
+  }
+
+  function openRoomInfo() {
+    const room = currentRoom();
+    if (!room) return;
+    const content = [];
+    if (room.id === MAIN_ROOM) {
+      content.push(el('p', { text: t('rooms.mainInfo') }));
+    } else {
+      content.push(el('p', { text: room.open ? t('rooms.forAllInfo') : t('rooms.forSomeInfo', { names: (room.members || []).map((m) => data.nameForMail(m)).join(', ') }) }));
+      content.push(el('p', { class: 'muted small', text: t('rooms.createdBy', { name: room.createdByName || '?' }) }));
+    }
+    const buttons = [];
+    if (room.id !== MAIN_ROOM && room.createdBy === uid) {
+      buttons.push({ label: t('common.edit'), onClick: (close) => { close(); openEditRoom(room); } });
+    }
+    if (room.id !== MAIN_ROOM && canEdit(session, room)) {
+      buttons.push({ label: t('rooms.delete'), kind: 'danger', onClick: async (close) => { if (await removeRoom(room)) close(); } });
+    }
+    openDialog({ title: room.id === MAIN_ROOM ? t('rooms.main') : room.name, content, buttons });
+  }
+
+  function openEditRoom(room) {
+    openForm({
+      title: t('rooms.edit'),
+      fields: roomFields(room),
+      onSubmit: async (v) => {
+        try {
+          await updateDoc(doc(db, 'rooms', room.id), roomData(v));
+          toast(t('common.saved'));
+          return undefined;
+        } catch (err) {
+          console.warn('Changing the room failed', err.code);
+          return t('common.saveFailed');
+        }
+      },
+    });
+  }
+
+  async function removeRoom(room) {
+    if (!confirm(t('rooms.confirmDelete', { name: room.name }))) return false;
+    try {
+      await deleteDoc(doc(db, 'rooms', room.id));
+      toast(t('rooms.deleted'));
+      openRoom(MAIN_ROOM);
+      return true;
+    } catch (err) {
+      console.warn('Deleting the room failed', err.code);
+      toast(t('common.saveFailed'));
+      return false;
     }
   }
 
@@ -317,47 +611,65 @@ export function createChat(session) {
       event.preventDefault();
       send();
     }
+    if (event.key === 'Escape' && reply) setReply(null);
   };
   const onPill = () => scrollToBottom();
+  const onCancelReply = () => setReply(null);
 
   scrollBox.addEventListener('scroll', onScroll, { passive: true });
   form.addEventListener('submit', onSubmit);
   input.addEventListener('input', updateComposer);
   input.addEventListener('keydown', onKeyDown);
   pill.addEventListener('click', onPill);
+  $('reply-cancel').addEventListener('click', onCancelReply);
+  $('room-add').onclick = openNewRoom;
+  $('room-settings').onclick = openRoomInfo;
 
   topLine.textContent = '';
   empty.hidden = true;
   updateComposer();
   subscribe();
   ensureRoom();
+  const stopRooms = data.subscribe(onRoomsChanged);
 
   return {
     // Called when the chat tab becomes visible again.
     onShow() {
+      visible = true;
       if (stickToBottom) scrollToBottom();
       fillScreen();
+      markSeen();
+      renderRooms();
       if (!coarsePointer) input.focus({ preventScroll: true });
     },
+    onHide() { visible = false; renderRooms(); },
+    openRoom,
+    isUnread,
     // Called when admin rights change (delete buttons on other people's messages).
     onRoleChange() {
       if (!roomReady) ensureRoom();
+      nodeCache.clear();
       render();
     },
     stop() {
       stopped = true;
+      stopRooms();
       if (unsubscribe) unsubscribe();
       scrollBox.removeEventListener('scroll', onScroll);
       form.removeEventListener('submit', onSubmit);
       input.removeEventListener('input', updateComposer);
       input.removeEventListener('keydown', onKeyDown);
       pill.removeEventListener('click', onPill);
+      $('reply-cancel').removeEventListener('click', onCancelReply);
       list.replaceChildren();
+      roomList.replaceChildren();
       topLine.textContent = '';
       notice.hidden = true;
       pill.hidden = true;
+      setReply(null);
       input.value = '';
       counter.hidden = true;
+      $('chat-dot').hidden = true;
       messages.clear();
       nodeCache.clear();
     },

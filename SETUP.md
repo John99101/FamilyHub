@@ -237,8 +237,16 @@ During the first deploy:
 - If it asks about a **cleanup policy** for container images, answer **Y**
   and keep the suggested 1 day. This keeps storage (and cost) near zero.
 - If it says the secret NGN_API_KEY or ANTHROPIC_API_KEY is missing, do
-  step 3 (and 3b) first. The deploy creates two functions: `marketUpdate`
-  (prices) and `riskSummary` (the daily AI summary).
+  step 3 (and 3b) first. The deploy creates four functions: `marketUpdate`
+  (prices), `riskSummary` (the daily AI summary), `weeklyDigest` (the weekly
+  family overview) and `cleanupRoom` (deletes the messages of a deleted chat
+  room).
+- `cleanupRoom` reacts to the database. On the very first deploy Google may
+  still be setting up permissions for that and the deploy can fail with a
+  message about Eventarc or permissions. Wait 5 minutes and run the same
+  deploy command again.
+- The deploy also creates one database index (for the list of recently done
+  tasks). It takes a few minutes to build; until then that list stays empty.
 
 At the end it prints **Hosting URL**: `https://familyhub-5355f.web.app`.
 Both `https://familyhub-5355f.web.app` and `https://familyhub-5355f.firebaseapp.com`
@@ -248,9 +256,9 @@ there.
 
 Open it, click **Mit Google anmelden** (the app follows the browser's
 language: German, English or French; you can change it under
-**Einstellungen** → **Sprache**), and sign in with `<your-mail>`. You should
-see the chat. The first time an admin opens the app, the chat room "Familie"
-is created automatically.
+**Mehr** → **Einstellungen** → **Sprache**), and sign in with `<your-mail>`.
+You should see the Start page. The first time an admin opens the chat, the
+room "Familie" is created automatically.
 
 **Install as an app on phones**
 
@@ -302,9 +310,17 @@ App Check does not apply to.
 
 ## 7. Daily use, costs, and the off switch
 
+**Before you invite the family: the market pages**
+
+Everyone on the allow list sees **Börse** and **Risiko**. The NGN Market free
+licence covers personal use only (README, "Terms of Service"). So before you
+add others, either get NGN's written OK (step 3 has a ready mail), or switch
+the market part off (**Mehr** → **Einstellungen** → **Börse**), or ask for a
+change that shows these two pages only to admins.
+
 **Add family members**
 
-1. In the app: **Einstellungen** → **Zugang**.
+1. In the app: **Mehr** → **Einstellungen** → **Zugang**.
 2. Type the person's Gmail address → **Hinzufügen**.
 3. Send them the link. They click **Mit Google anmelden**.
 4. To give someone admin rights: **Zum Admin machen**. To remove someone:
@@ -337,6 +353,25 @@ holidays. The switch is in the app (admins only): **Einstellungen** →
   advice. Switch it off in the app: **Einstellungen** → **Börse** →
   **Tägliche KI Zusammenfassung (Claude)**.
 - Nothing here needs your computer: both jobs run on Google's servers.
+
+**The weekly overview** (Start page)
+
+- Every Sunday at 17:00 Berlin time the server collects the coming week
+  (Monday to Sunday): calendar entries, birthdays, tasks that are due, open
+  polls. Claude Opus 5.5 writes a short overview in German, English and
+  French; everyone sees it in their language. Notes, chat, contacts, recipes
+  and mail addresses are never sent. If nothing is planned, nothing is sent.
+- The first one appears on the first Sunday after the deploy. To get one
+  right away: Google Cloud console → **Cloud Scheduler** (search for it at the
+  top) → the job `firebase-schedule-weeklyDigest-europe-west3` → **⋮** →
+  **Force run**.
+- Switch it off in the app: **Mehr** → **Einstellungen** → **Wochenüberblick**.
+
+**Weather**
+
+The weather page asks Open-Meteo (free for private use, no key, no account)
+straight from each device, with the rough coordinates of the saved places.
+Up to about 10,000 requests a day are free; a family uses a few dozen.
 
 **See how many API calls are used**
 
@@ -376,9 +411,16 @@ All of this stays inside Google's free amounts for a family:
 
 - Hosting: free up to 10 GB storage and 360 MB transfer per day.
 - Firestore: free up to 50,000 reads and 20,000 writes per day. The market
-  function writes about 2 documents per run (≈ 650 writes per month).
-- Cloud Functions: about 370 runs per month; free up to 2 million.
-- Cloud Scheduler: 3 jobs free per billing account; this app uses 2.
+  function writes about 2 documents per run (≈ 650 writes per month). Each
+  time someone opens the app, it reads the open tasks, the calendar from two
+  months ago on, the polls and the chat rooms (a few hundred documents for a
+  busy family); recipes and contacts only when their page is opened. 10
+  people opening the app 5 times a day stay well inside the free amount.
+- Cloud Functions: about 375 runs per month; free up to 2 million.
+- Cloud Scheduler: 3 jobs free per **billing account**; this app uses 3
+  (prices, risk summary, weekly overview). If other projects on the same
+  billing account also use Cloud Scheduler, each extra job costs about 0.10
+  USD per month.
 - Secret Manager: free up to 6 secret versions and 10,000 reads per month;
   this app uses 2 secrets.
 - Possible small costs: storing the functions' container images (Artifact
@@ -395,6 +437,10 @@ tokens (its thinking counts as output): roughly 0.07 USD per day, so about
 **1 to 3 USD per month** (about 21 trading days). The spend limit from step 3b
 caps it. If Claude declines a request (rare), Anthropic retries it once on a
 fallback model it picks; that is billed at that model's price.
+
+**Weekly overview (Anthropic):** about 1,500 input tokens and up to about
+4,000 output tokens (three languages plus thinking), roughly 0.05 to 0.10 USD
+per week, so about **0.20 to 0.40 USD per month** on top.
 
 **Switch the market part off**
 
@@ -423,7 +469,17 @@ fallback model it picks; that is billed at that model's price.
   ```
 
   And revoke the key on https://console.anthropic.com → **Settings** →
-  **API keys**.
+  **API keys** (this also stops the weekly overview).
+
+**Switch the weekly overview off**
+
+- Soft: in the app, **Mehr** → **Einstellungen** → **Wochenüberblick** →
+  switch off. The Start page then hides the overview card.
+- Hard:
+
+  ```
+  firebase functions:delete weeklyDigest --region europe-west3
+  ```
 
 ---
 

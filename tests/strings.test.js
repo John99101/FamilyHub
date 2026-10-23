@@ -52,4 +52,23 @@ describe('app text', () => {
     }
     for (const key of used) assert.ok(key in STRINGS.de, `missing key ${key}`);
   });
+
+  it('every key built in code (categories, groups, reactions, weather) exists', () => {
+    const built = [
+      ...['main', 'starter', 'dessert', 'baking', 'breakfast', 'drink', 'other'].map((c) => `recipes.cat.${c}`),
+      ...['emergency', 'family', 'health', 'service', 'other'].map((g) => `contacts.group.${g}`),
+      ...['like', 'love', 'laugh', 'wow', 'sad', 'thanks'].map((r) => `chat.react.${r}`),
+      ...['morning', 'day', 'evening'].flatMap((k) => [`home.${k}`, `home.${k}Name`]),
+    ];
+    // Plus every quoted key such as 'weather.clear' or 'settings.digestOn' in the page code.
+    const prefixes = 'cal|tasks|polls|recipes|contacts|weather|rooms|chat|home|settings|day|nav|common|more|form';
+    const jsDir = new URL('../public/js/', import.meta.url);
+    for (const file of readdirSync(jsDir).filter((f) => f.endsWith('.js') && !f.startsWith('strings'))) {
+      const src = readFileSync(new URL(file, jsDir), 'utf8');
+      for (const m of src.matchAll(new RegExp(`'((?:${prefixes})\\.[A-Za-z][\\w.]*)'`, 'g'))) built.push(m[1]);
+    }
+    for (const lang of LANGS) {
+      for (const key of built) assert.ok(key in STRINGS[lang], `${lang} is missing ${key}`);
+    }
+  });
 });

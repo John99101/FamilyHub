@@ -4,7 +4,9 @@
 // and that all three languages have exactly the same keys and placeholders.
 // {name} marks a value filled in by the app.   is a space that never breaks.
 
-export const STRINGS = {
+import { FAMILY_STRINGS } from './strings-family.js';
+
+const BASE = {
   de: {
     'common.loading': 'Wird geladen',
     'common.signout': 'Abmelden',
@@ -485,3 +487,8 @@ export const STRINGS = {
     'settings.version': 'Version',
   },
 };
+
+// The family hub texts live in strings-family.js and are merged in here.
+export const STRINGS = Object.fromEntries(
+  Object.keys(BASE).map((lang) => [lang, { ...BASE[lang], ...FAMILY_STRINGS[lang] }]),
+);

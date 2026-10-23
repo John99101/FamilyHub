@@ -1,4 +1,5 @@
-// FamilyHub main script: sign in, allow list check, navigation.
+// FamilyHub main script: sign in, allow list check, navigation, and starting
+// the pages once someone on the allow list is signed in.
 import {
   auth, db, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
   onAuthStateChanged, signOut, doc, onSnapshot,
@@ -10,27 +11,43 @@ import { createSettings, updateThemeColor } from './settings.js';
 import { createMarketData } from './market-data.js';
 import { createMarkets } from './markets.js';
 import { createRiskPage } from './risk-page.js';
+import { createFamilyData } from './family-data.js';
+import { createHome } from './home.js';
+import { createCalendar } from './calendar.js';
+import { createTasks } from './tasks.js';
+import { createPolls } from './polls.js';
+import { createRecipes } from './recipes.js';
+import { createContacts } from './contacts.js';
+import { createWeather } from './weather.js';
 
-export const APP_VERSION = '1.1.1';
+export const APP_VERSION = '1.2.0';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();
 
 const SCREENS = ['loading', 'signin', 'noaccess', 'app'];
+// tab: which tab is highlighted; back: a page under "Mehr" (shows a back link).
 const ROUTES = {
-  chat: { title: 'nav.chat', view: 'view-chat' },
-  boerse: { title: 'nav.markets', view: 'view-markets' },
-  risiko: { title: 'nav.risk', view: 'view-risk' },
-  einstellungen: { title: 'nav.settings', view: 'view-settings' },
+  start: { title: 'nav.home', view: 'view-home', page: 'home', tab: 'start' },
+  chat: { title: 'nav.chat', view: 'view-chat', page: 'chat', tab: 'chat' },
+  kalender: { title: 'nav.calendar', view: 'view-calendar', page: 'calendar', tab: 'kalender' },
+  aufgaben: { title: 'nav.tasks', view: 'view-tasks', page: 'tasks', tab: 'aufgaben' },
+  mehr: { title: 'nav.more', view: 'view-more', tab: 'mehr' },
+  umfragen: { title: 'nav.polls', view: 'view-polls', page: 'polls', tab: 'mehr', back: true },
+  rezepte: { title: 'nav.recipes', view: 'view-recipes', page: 'recipes', tab: 'mehr', back: true },
+  kontakte: { title: 'nav.contacts', view: 'view-contacts', page: 'contacts', tab: 'mehr', back: true },
+  wetter: { title: 'nav.weather', view: 'view-weather', page: 'weather', tab: 'mehr', back: true },
+  boerse: { title: 'nav.markets', view: 'view-markets', page: 'markets', tab: 'mehr', back: true },
+  risiko: { title: 'nav.risk', view: 'view-risk', page: 'risk', tab: 'mehr', back: true },
+  einstellungen: { title: 'nav.settings', view: 'view-settings', page: 'settings', tab: 'mehr', back: true },
 };
 
 let session = null;   // { user, claims, mail, access, isAdmin }
 let stopAccess = null;
-let chat = null;
-let settings = null;
+let pages = null;     // all pages, created once access is confirmed
+let familyData = null;
 let marketData = null;
-let markets = null;
-let riskPage = null;
+let currentPage = null;
 let authRound = 0;
 
 function showScreen(name) {
@@ -40,16 +57,13 @@ function showScreen(name) {
 function teardown() {
   if (stopAccess) stopAccess();
   stopAccess = null;
-  if (chat) chat.stop();
-  if (markets) markets.stop();
-  if (riskPage) riskPage.stop();
-  if (settings) settings.stop();
+  if (pages) for (const page of Object.values(pages)) page.stop();
+  if (familyData) familyData.stop();
   if (marketData) marketData.stop();
-  chat = null;
-  settings = null;
-  markets = null;
-  riskPage = null;
+  pages = null;
+  familyData = null;
   marketData = null;
+  currentPage = null;
   session = null;
 }
 
@@ -119,11 +133,14 @@ onAuthStateChanged(auth, async (user) => {
     const wasAdmin = session.isAdmin;
     session.access = snap.data() || { members: [], admins: [] };
     session.isAdmin = Array.isArray(session.access.admins) && session.access.admins.includes(session.mail);
-    if (!chat) {
+    if (!pages) {
       startApp();
     } else {
-      settings.update();
-      if (wasAdmin !== session.isAdmin) chat.onRoleChange();
+      pages.settings.update();
+      if (wasAdmin !== session.isAdmin) {
+        pages.chat.onRoleChange();
+        pages.contacts.onRoleChange();
+      }
     }
   }, (err) => {
     console.warn('Access check failed', err.code);
@@ -136,28 +153,46 @@ onAuthStateChanged(auth, async (user) => {
 
 function startApp() {
   showScreen('app');
-  chat = createChat(session);
+  familyData = createFamilyData(session);
   marketData = createMarketData();
-  markets = createMarkets(marketData);
-  riskPage = createRiskPage(marketData);
-  settings = createSettings(session, { onSignOut: doSignOut, marketData });
+  const weather = createWeather(familyData);
+  const calendar = createCalendar(familyData);
+  const tasks = createTasks(familyData);
+  const chat = createChat(session, familyData);
+  pages = {
+    chat,
+    calendar,
+    tasks,
+    weather,
+    polls: createPolls(familyData),
+    recipes: createRecipes(familyData),
+    contacts: createContacts(familyData),
+    markets: createMarkets(marketData),
+    risk: createRiskPage(marketData),
+    settings: createSettings(session, { onSignOut: doSignOut, marketData, familyData }),
+  };
+  pages.home = createHome(familyData, { calendar, tasks, chat, weather });
   route();
 }
 
 function route() {
-  if (!session || !chat) return;
+  if (!session || !pages) return;
   let name = location.hash.replace(/^#\/?/, '');
-  if (!ROUTES[name]) name = 'chat';
-  for (const [key, r] of Object.entries(ROUTES)) $(r.view).hidden = key !== name;
+  if (!ROUTES[name]) name = 'start';
+  const r = ROUTES[name];
+  for (const [key, other] of Object.entries(ROUTES)) $(other.view).hidden = key !== name;
   for (const tab of document.querySelectorAll('.tab')) {
-    if (tab.dataset.route === name) tab.setAttribute('aria-current', 'page');
+    if (tab.dataset.route === r.tab) tab.setAttribute('aria-current', 'page');
     else tab.removeAttribute('aria-current');
   }
-  const title = t(ROUTES[name].title);
+  $('back-link').hidden = !r.back;
+  const title = t(r.title);
   $('view-title').textContent = title;
   document.title = `${title} · FamilyHub`;
-  if (name === 'chat') chat.onShow();
-  if (name === 'boerse') markets.onShow();
+  const page = r.page ? pages[r.page] : null;
+  if (currentPage && currentPage !== page && currentPage.onHide) currentPage.onHide();
+  currentPage = page;
+  if (page && page.onShow) page.onShow();
 }
 
 window.addEventListener('hashchange', route);

@@ -11,9 +11,17 @@
 // figures (numbers only) to Claude Opus 5.5 and stores a short note in
 // English and French (market/riskSummary).
 //
+// weeklyDigest: Sunday 17:00 Berlin time. Sends the coming week's calendar
+// entries, due tasks and open polls (no chat, contacts or recipes) to Claude
+// Opus 5.5 and stores a short overview in German, English and French
+// (digest/current). If nothing is planned, nothing is sent.
+//
+// cleanupRoom: when a chat room is deleted in the app, deletes its messages.
+//
 // The browser only ever reads Firestore; it never talks to NGN Market or
 // Anthropic and never sees a key. Keys live only in Secret Manager.
 import { onSchedule } from 'firebase-functions/scheduler';
+import { onDocumentDeleted } from 'firebase-functions/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import * as logger from 'firebase-functions/logger';
 import { initializeApp } from 'firebase-admin/app';
@@ -23,6 +31,7 @@ import { createNgnClient } from './ngn-client.js';
 import { createFirestoreStore } from './firestore-store.js';
 import { runMarketUpdate } from './market.js';
 import { runRiskSummary } from './ai-summary.js';
+import { runWeeklyDigest, DIGEST_TIME_ZONE } from './digest.js';
 
 const NGN_API_KEY = defineSecret('NGN_API_KEY');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -74,5 +83,41 @@ export const riskSummary = onSchedule(
       logger,
     });
     if (result.kind === 'skip') logger.info('AI summary skipped', { reason: result.reason });
+  },
+);
+
+export const weeklyDigest = onSchedule(
+  {
+    schedule: '0 17 * * 0', // Sunday 17:00
+    timeZone: DIGEST_TIME_ZONE,
+    region: 'europe-west3',
+    secrets: [ANTHROPIC_API_KEY],
+    memory: '256MiB',
+    timeoutSeconds: 300,
+    maxInstances: 1,
+    retryCount: 0, // a failed week keeps the last overview visible
+  },
+  async () => {
+    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value(), maxRetries: 1, timeout: 180000 });
+    const result = await runWeeklyDigest({
+      anthropic,
+      store: createFirestoreStore(getFirestore()),
+      now: new Date(),
+      logger,
+    });
+    if (result.kind === 'skip') logger.info('Weekly overview skipped', { reason: result.reason });
+  },
+);
+
+// Deleting a room in the app removes the room document; its messages are
+// deleted here (the app itself may only delete each person's own messages).
+export const cleanupRoom = onDocumentDeleted(
+  { document: 'rooms/{roomId}', region: 'europe-west3', memory: '256MiB', timeoutSeconds: 300, maxInstances: 1 },
+  async (event) => {
+    const roomId = event.params.roomId;
+    if (roomId === 'familie') return;
+    const db = getFirestore();
+    await db.recursiveDelete(db.collection('rooms').doc(roomId).collection('messages'));
+    logger.info('Messages of a deleted room removed', { roomId });
   },
 );

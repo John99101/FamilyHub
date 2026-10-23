@@ -1,12 +1,62 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "done",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "doneAt",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
   "fieldOverrides": [
-    { "collectionGroup": "messages", "fieldPath": "text", "ttl": false, "indexes": [] },
-    { "collectionGroup": "messages", "fieldPath": "photo", "ttl": false, "indexes": [] },
-    { "collectionGroup": "market", "fieldPath": "quotes", "ttl": false, "indexes": [] },
-    { "collectionGroup": "market", "fieldPath": "indices", "ttl": false, "indexes": [] },
-    { "collectionGroup": "market", "fieldPath": "extras", "ttl": false, "indexes": [] },
-    { "collectionGroup": "market", "fieldPath": "holidays", "ttl": false, "indexes": [] },
-    { "collectionGroup": "marketHistory", "fieldPath": "closes", "ttl": false, "indexes": [] }
+    {
+      "collectionGroup": "messages",
+      "fieldPath": "text",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "messages",
+      "fieldPath": "photo",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "market",
+      "fieldPath": "quotes",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "market",
+      "fieldPath": "indices",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "market",
+      "fieldPath": "extras",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "market",
+      "fieldPath": "holidays",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "marketHistory",
+      "fieldPath": "closes",
+      "ttl": false,
+      "indexes": []
+    }
   ]
 }

@@ -89,16 +89,17 @@ export function buildSummaryRequest(prompt) {
   };
 }
 
-/** Removes hyphens and dashes (app text rule), tidies spaces, limits the length. */
-export function cleanSummaryText(text) {
+/** Removes hyphens and dashes (app text rule), says "Mail", tidies spaces, limits the length. */
+export function cleanSummaryText(text, maxChars = SUMMARY_MAX_CHARS) {
   let s = String(text || '')
+    .replace(/\b[Ee][‐-―−﹘﹣－ -]?[Mm]ail(s?)\b/g, 'Mail$1')
     .replace(/[‐-―−⸺⸻﹘﹣－-]+/g, ' ')
     .replace(/[ \t]+/g, ' ')
     .replace(/ ([,.;:!?])/g, (m, c) => (c === ':' || c === '!' || c === '?' || c === ';' ? m : c))
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  if (s.length > SUMMARY_MAX_CHARS) {
-    const cut = s.slice(0, SUMMARY_MAX_CHARS);
+  if (s.length > maxChars) {
+    const cut = s.slice(0, maxChars);
     const end = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('.\n'));
     s = (end > 200 ? cut.slice(0, end + 1) : cut).trim();
   }
@@ -113,8 +114,11 @@ export class SummaryError extends Error {
   }
 }
 
-/** Reads { en, fr } from the response; throws SummaryError if unusable. */
-export function parseSummary(response) {
+/**
+ * Reads one text per language from a JSON answer ({ en: '...', fr: '...' });
+ * throws SummaryError if the answer is unusable. Shared with the weekly overview.
+ */
+export function parseLanguageTexts(response, languages, maxChars = SUMMARY_MAX_CHARS) {
   if (response?.stop_reason === 'refusal') {
     throw new SummaryError('refusal', 'the model declined', { category: response.stop_details?.category ?? null });
   }
@@ -126,10 +130,17 @@ export function parseSummary(response) {
   } catch {
     throw new SummaryError('bad_json', 'answer was not valid JSON');
   }
-  const en = cleanSummaryText(data?.en);
-  const fr = cleanSummaryText(data?.fr);
-  if (!en || !fr) throw new SummaryError('empty', 'a language is missing');
-  return { en, fr };
+  const out = {};
+  for (const lang of languages) {
+    out[lang] = cleanSummaryText(data?.[lang], maxChars);
+    if (!out[lang]) throw new SummaryError('empty', 'a language is missing');
+  }
+  return out;
+}
+
+/** Reads { en, fr } from the response; throws SummaryError if unusable. */
+export function parseSummary(response) {
+  return parseLanguageTexts(response, ['en', 'fr']);
 }
 
 /**

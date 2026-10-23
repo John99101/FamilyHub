@@ -32,7 +32,7 @@ export function updateThemeColor() {
 
 // ---------- settings page ----------
 
-export function createSettings(session, { onSignOut, marketData }) {
+export function createSettings(session, { onSignOut, marketData, familyData }) {
   const accessRef = doc(db, 'config', 'access');
   const card = $('card-access');
   const listBox = $('access-list');
@@ -243,14 +243,38 @@ export function createSettings(session, { onSignOut, marketData }) {
     }
   }
 
+  // ---------- weekly overview switch (admins only; missing counts as on) ----------
+
+  const digestCard = $('card-digest-admin');
+  const digestSwitch = $('digest-switch');
+
+  digestSwitch.onchange = async () => {
+    const enabled = digestSwitch.checked;
+    try {
+      await setDoc(doc(db, 'config', 'digest'), { enabled, updatedAt: serverTimestamp(), updatedBy: session.mail });
+      toast(t(enabled ? 'settings.digestOn' : 'settings.digestOff'));
+    } catch (err) {
+      console.warn('Saving the overview switch failed', err.code);
+      toast(t('common.saveFailed'));
+      digestSwitch.checked = !enabled;
+    }
+  };
+
+  function renderDigestAdmin(state) {
+    digestCard.hidden = !session.isAdmin;
+    if (session.isAdmin) digestSwitch.checked = state.digestSwitch?.enabled !== false;
+  }
+
   renderAccess();
   const stopMarket = marketData.subscribe((state) => { renderWatch(state); renderMarketAdmin(state); });
+  const stopFamily = familyData.subscribe(renderDigestAdmin);
 
   return {
     update() {
       renderAccess();
       renderMarketAdmin(marketData.state);
+      renderDigestAdmin(familyData.state);
     },
-    stop() { stopMarket(); },
+    stop() { stopMarket(); stopFamily(); },
   };
 }
