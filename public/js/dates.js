@@ -123,3 +123,33 @@ export function upcoming(events, from, to) {
   }
   return list.sort((a, b) => (a.day !== b.day ? (a.day < b.day ? -1 : 1) : compareEntries(a, b)));
 }
+
+/** Whether an entry lasts several days (drawn as a line in the month view). */
+export const isMultiDay = (e) => e.repeat !== 'yearly' && isIso(e.endDate) && e.endDate > e.date;
+
+/**
+ * Lines for entries over several days in one week: which columns they span
+ * and on which lane (row) they are drawn, so lines never overlap.
+ */
+export function weekLines(events, weekDays) {
+  const first = weekDays[0];
+  const last = weekDays[6];
+  const segments = events
+    .filter((e) => isMultiDay(e) && e.date <= last && e.endDate >= first)
+    .map((e) => ({
+      event: e,
+      from: daysBetween(first, e.date < first ? first : e.date),
+      to: daysBetween(first, e.endDate > last ? last : e.endDate),
+      startsHere: e.date >= first,
+      endsHere: e.endDate <= last,
+    }))
+    .sort((a, b) => a.from - b.from || (b.to - b.from) - (a.to - a.from) || String(a.event.title).localeCompare(String(b.event.title)));
+  const lanes = [];
+  for (const s of segments) {
+    let lane = lanes.findIndex((end) => end < s.from);
+    if (lane === -1) { lane = lanes.length; lanes.push(-1); }
+    lanes[lane] = s.to;
+    s.lane = lane;
+  }
+  return segments;
+}

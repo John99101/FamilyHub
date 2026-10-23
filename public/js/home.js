@@ -4,7 +4,8 @@ import { $, el, card, emptyNote, formatWeekdayDay, formatDayMonth, formatTime, r
 import { t, lang } from './i18n.js';
 import { todayIso, addDays, daysBetween, upcoming } from './dates.js';
 import { firstName, myName, toDate } from './family-data.js';
-import { entryMeta, entryIcon } from './calendar.js';
+import { entryButton, entryColor } from './calendar.js';
+import { paint } from './colors.js';
 import { taskItem, sortOpenTasks } from './tasks.js';
 import { myVote, voteCount } from './polls.js';
 import { weatherInfo } from './weather.js';
@@ -25,10 +26,19 @@ export function createHome(data, pages) {
   const session = data.session;
   let visible = false;
 
-  function digestCard() {
+  // The family's overview, and one for each household this person is in.
+  function digestCards() {
     const sw = data.state.digestSwitch;
-    if (sw && sw.enabled === false) return null;
-    const d = data.state.digest;
+    if (sw && sw.enabled === false) return [];
+    const cards = [digestCard(data.state.digest, t('home.digestTitle'))];
+    for (const h of data.myHouseholds()) {
+      const d = data.state.householdDigests[h.id];
+      if (d) cards.push(digestCard(d, t('home.digestHousehold', { name: h.name })));
+    }
+    return cards;
+  }
+
+  function digestCard(d, title) {
     let body;
     if (!d || (!d.weekStart && !d.empty)) {
       body = emptyNote(t('home.digestFirst'));
@@ -40,7 +50,7 @@ export function createHome(data, pages) {
     const note = d && d.weekStart
       ? t('home.digestNote', { date: formatWeekdayDay(d.weekStart) })
       : t('home.digestAbout');
-    return card(t('home.digestTitle'), [body, el('p', { class: 'muted small', text: note })], { className: 'card-digest' });
+    return card(title, [body, el('p', { class: 'muted small', text: note })], { className: 'card-digest' });
   }
 
   function nextDaysCard() {
@@ -59,20 +69,9 @@ export function createHome(data, pages) {
       const label = diff <= 1 ? `${relativeDays(diff)} · ${formatWeekdayDay(g.day)}` : formatWeekdayDay(g.day);
       return el('div', { class: 'home-day' }, [
         el('h3', { class: 'home-day-title', text: label }),
-        el('ul', { class: 'entry-list' }, g.items.map((item) => {
-          const e = item.event;
-          const meta = entryMeta(item, item.day);
-          return el('li', {}, [el('button', {
-            class: 'entry', type: 'button',
-            onclick: () => { location.hash = '#/kalender'; pages.calendar.showDay(item.day); },
-          }, [
-            el('span', { class: `entry-time ${e.time ? '' : 'entry-icon'}`, text: e.time || entryIcon(e) || t('cal.allDay') }),
-            el('span', { class: 'entry-main' }, [
-              el('span', { class: 'entry-title', text: e.title }),
-              meta ? el('span', { class: 'entry-meta', text: meta }) : null,
-            ]),
-          ])]);
-        })),
+        el('ul', { class: 'entry-list' }, g.items.map((item) => el('li', {}, [
+          entryButton(data, item, item.day, () => { location.hash = '#/kalender'; pages.calendar.showDay(item.day); }),
+        ]))),
       ]);
     });
     return card(t('home.nextDays'), list, { action });
@@ -84,7 +83,7 @@ export function createHome(data, pages) {
     const items = upcoming(data.state.yearly.filter((e) => e.kind === 'birthday'), from, addDays(today, BIRTHDAY_DAYS)).slice(0, 5);
     if (!items.length) return null;
     return card(t('home.birthdays'), el('ul', { class: 'simple-list' }, items.map((item) => el('li', {}, [
-      el('span', { class: 'simple-main', text: `🎂 ${item.event.title}` }),
+      paint(el('span', { class: 'simple-main colored-line', text: `🎂 ${item.event.title}` }), entryColor(data, item.event)),
       el('span', { class: 'muted small', text: [formatDayMonth(item.day), relativeDays(daysBetween(today, item.day)), item.years ? t('cal.turns', { n: item.years }) : ''].filter(Boolean).join(' · ') }),
     ]))));
   }
@@ -121,7 +120,7 @@ export function createHome(data, pages) {
     return card(t('home.chat'), el('ul', { class: 'simple-list' }, rooms.map((r) => {
       const at = toDate(r.last.at);
       const unread = pages.chat.isUnread(r);
-      const who = r.last.uid === session.user.uid ? t('home.you') : firstName(r.last.name) || '?';
+      const who = r.last.uid === session.user.uid ? t('home.you') : data.shortNameForUid(r.last.uid, r.last.name) || '?';
       return el('li', {}, [
         el('button', { class: `room-line ${unread ? 'unread' : ''}`, type: 'button', onclick: () => { pages.chat.openRoom(r.id); location.hash = '#/chat'; } }, [
           el('span', { class: 'room-line-head' }, [
@@ -158,7 +157,7 @@ export function createHome(data, pages) {
         el('p', { class: 'home-greeting', text: greeting(name) }),
         el('p', { class: 'muted', text: formatWeekdayDay(todayIso()) }),
       ]),
-      ...[digestCard(), nextDaysCard(), birthdaysCard(), tasksCard(), pollsCard(), chatCard(), weatherCard()].filter(Boolean),
+      ...[...digestCards(), nextDaysCard(), birthdaysCard(), tasksCard(), pollsCard(), chatCard(), weatherCard()].filter(Boolean),
     );
   }
 

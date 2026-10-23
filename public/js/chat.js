@@ -11,7 +11,8 @@ import {
 } from './firebase.js';
 import { $, el, avatar, svgIcon, TRASH_ICON, toast, formatTime, formatDateTime, dayKey, dayLabel } from './ui.js';
 import { t } from './i18n.js';
-import { MAIN_ROOM, canEdit, createdFields, firstName, toDate } from './family-data.js';
+import { MAIN_ROOM, canEdit, createdFields, toDate } from './family-data.js';
+import { paint } from './colors.js';
 import { openForm, openDialog } from './dialog.js';
 
 export const ROOM_ID = MAIN_ROOM;
@@ -30,6 +31,9 @@ const REPLY_ICON = ['m9 14-5-5 5-5', 'M4 9h10a6 6 0 0 1 6 6v4'];
 export const REACTIONS = [
   ['like', '👍'], ['love', '❤️'], ['laugh', '😂'], ['wow', '😮'], ['sad', '😢'], ['thanks', '🙏'],
 ];
+
+/** Where a room is stored: family rooms at rooms/{id}, a household's room at households/{id}/rooms/main. */
+export const roomPath = (id) => (id.startsWith('h:') ? `households/${id.slice(2)}/rooms/main` : `rooms/${id}`);
 
 // ---------- "new" markers: when each room was last looked at (this device only) ----------
 
@@ -60,7 +64,7 @@ export function createChat(session, data) {
 
   let roomId = MAIN_ROOM;
   try { roomId = localStorage.getItem(ROOM_KEY) || MAIN_ROOM; } catch { /* storage blocked */ }
-  let messagesRef = collection(db, 'rooms', roomId, 'messages');
+  let messagesRef = collection(db, roomPath(roomId), 'messages');
   const messages = new Map(); // id -> message
   const nodeCache = new Map(); // id -> { key, node }
   const seen = loadSeen();
@@ -106,6 +110,7 @@ export function createChat(session, data) {
       'aria-pressed': r.id === roomId ? 'true' : 'false',
       onclick: () => openRoom(r.id),
     }, [
+      r.household ? el('span', { class: 'room-lock', 'aria-label': t('rooms.householdRoom'), text: '🏠' }) : null,
       r.open === false ? el('span', { class: 'room-lock', 'aria-label': t('rooms.closedRoom'), text: '🔒' }) : null,
       el('span', { text: r.id === MAIN_ROOM ? t('rooms.main') : r.name }),
     ])));
@@ -120,7 +125,7 @@ export function createChat(session, data) {
     try { localStorage.setItem(ROOM_KEY, id); } catch { /* storage blocked */ }
     if (unsubscribe) unsubscribe();
     unsubscribe = null;
-    messagesRef = collection(db, 'rooms', roomId, 'messages');
+    messagesRef = collection(db, roomPath(roomId), 'messages');
     messages.clear();
     nodeCache.clear();
     list.replaceChildren();
@@ -159,6 +164,8 @@ export function createChat(session, data) {
     if (!roomReady && currentRoom()) ensureRoom();
     renderRooms();
     markSeen();
+    // Names (nicknames) and colors may have changed: redraw (unchanged messages are reused).
+    render();
   }
 
   // ---------- data ----------
@@ -288,7 +295,7 @@ export function createChat(session, data) {
       const who = Array.isArray(m.reactions[key]) ? m.reactions[key] : [];
       if (!who.length) continue;
       const mine = who.includes(uid);
-      const names = who.map((x) => (x === uid ? t('home.you') : firstName(data.nameForUid(x)) || '?')).join(', ');
+      const names = who.map((x) => (x === uid ? t('home.you') : data.shortNameForUid(x) || '?')).join(', ');
       pills.push(el('button', {
         class: `reaction ${mine ? 'mine' : ''}`.trim(), type: 'button', 'aria-pressed': mine ? 'true' : 'false',
         title: names, 'aria-label': `${emoji} ${who.length}: ${names}`,
@@ -317,7 +324,11 @@ export function createChat(session, data) {
   function messageNode(m, continued) {
     const own = m.uid === uid;
     const active = activeId === m.id;
-    const key = [m.text, m.name, m.photo, m.pending, continued, canDelete(m), active, JSON.stringify(m.reactions), m.replyTo?.id, Math.floor(m.ms / 60000)].join('|');
+    // The name this person sees (their own nickname for the sender, if any) and the sender's color.
+    const shown = data.nameForUid(m.uid, m.name) || t('chat.unknownSender');
+    const color = data.colorForUid(m.uid);
+    const quoteName = m.replyTo ? data.nameForGoogleName(m.replyTo.name) : '';
+    const key = [m.text, shown, color, quoteName, m.photo, m.pending, continued, canDelete(m), active, JSON.stringify(m.reactions), m.replyTo?.id, Math.floor(m.ms / 60000)].join('|');
     const cached = nodeCache.get(m.id);
     if (cached && cached.key === key) return cached.node;
 
@@ -335,12 +346,12 @@ export function createChat(session, data) {
     }
 
     const quote = m.replyTo ? el('button', { class: 'quote', type: 'button', onclick: () => scrollToMessage(m.replyTo.id) }, [
-      el('span', { class: 'quote-name', text: m.replyTo.name || t('chat.unknownSender') }),
+      el('span', { class: 'quote-name', text: quoteName || t('chat.unknownSender') }),
       el('span', { class: 'quote-text', text: m.replyTo.text }),
     ]) : null;
 
     const bubble = el('div', { class: 'bubble' }, [
-      el('div', { class: 'msg-name', text: m.name || t('chat.unknownSender') }),
+      paint(el('div', { class: 'msg-name', text: shown }), color),
       quote,
       el('div', { class: 'msg-text', text: m.text }),
       meta,
@@ -351,7 +362,7 @@ export function createChat(session, data) {
     if (continued) classes.push('cont');
     if (m.pending) classes.push('pending');
     const column = el('div', { class: 'msg-col' }, [bubble, reactionRow(m), active ? actionRow(m) : null]);
-    const node = el('div', { class: classes.join(' '), 'data-id': m.id }, own ? [column] : [avatar(m.name, m.photo), column]);
+    const node = el('div', { class: classes.join(' '), 'data-id': m.id }, own ? [column] : [avatar(shown, m.photo, false, color), column]);
     nodeCache.set(m.id, { key, node });
     return node;
   }
@@ -431,7 +442,7 @@ export function createChat(session, data) {
   function setReply(m) {
     reply = m ? { id: m.id, name: (m.name || '').slice(0, 100), text: m.text.replace(/\s+/g, ' ').trim().slice(0, 140) } : null;
     replyBar.hidden = !reply;
-    $('reply-name').textContent = reply ? t('chat.replyTo', { name: reply.name || t('chat.unknownSender') }) : '';
+    $('reply-name').textContent = reply ? t('chat.replyTo', { name: (m && data.nameForUid(m.uid, reply.name)) || t('chat.unknownSender') }) : '';
     $('reply-snippet').textContent = reply ? reply.text : '';
     if (reply && !coarsePointer) input.focus({ preventScroll: true });
   }
@@ -468,7 +479,7 @@ export function createChat(session, data) {
     // The message and the room preview (newest message) are written together.
     const batch = writeBatch(db);
     batch.set(doc(messagesRef), message);
-    batch.update(doc(db, 'rooms', roomId), {
+    batch.update(doc(db, roomPath(roomId)), {
       last: { uid, name, text: text.replace(/\s+/g, ' ').slice(0, 120), at: serverTimestamp() },
     });
     try {
@@ -553,15 +564,18 @@ export function createChat(session, data) {
     const content = [];
     if (room.id === MAIN_ROOM) {
       content.push(el('p', { text: t('rooms.mainInfo') }));
+    } else if (room.household) {
+      const h = data.state.households.find((x) => x.id === room.household);
+      content.push(el('p', { text: t('rooms.householdInfo', { names: (h?.members || []).map((x) => data.nameForMail(x)).join(', ') }) }));
     } else {
       content.push(el('p', { text: room.open ? t('rooms.forAllInfo') : t('rooms.forSomeInfo', { names: (room.members || []).map((m) => data.nameForMail(m)).join(', ') }) }));
       content.push(el('p', { class: 'muted small', text: t('rooms.createdBy', { name: room.createdByName || '?' }) }));
     }
     const buttons = [];
-    if (room.id !== MAIN_ROOM && room.createdBy === uid) {
+    if (room.id !== MAIN_ROOM && !room.household && room.createdBy === uid) {
       buttons.push({ label: t('common.edit'), onClick: (close) => { close(); openEditRoom(room); } });
     }
-    if (room.id !== MAIN_ROOM && canEdit(session, room)) {
+    if (room.id !== MAIN_ROOM && !room.household && canEdit(session, room)) {
       buttons.push({ label: t('rooms.delete'), kind: 'danger', onClick: async (close) => { if (await removeRoom(room)) close(); } });
     }
     openDialog({ title: room.id === MAIN_ROOM ? t('rooms.main') : room.name, content, buttons });

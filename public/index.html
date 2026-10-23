@@ -16,6 +16,7 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="stylesheet" href="/css/app.css">
   <link rel="stylesheet" href="/css/family.css">
+  <link rel="stylesheet" href="/css/house.css">
   <script src="/js/theme-boot.js"></script>
   <script type="module" src="/js/app.js"></script>
 </head>
@@ -101,6 +102,11 @@
       <section id="view-more" class="view" aria-labelledby="view-title" hidden>
         <div class="content">
           <nav class="tiles" aria-labelledby="view-title">
+            <a class="tile" href="#/familie">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17.5" cy="9.5" r="2.5"/><path d="M15.5 14.6A4.8 4.8 0 0 1 21.5 19"/></svg>
+              <span class="tile-title" data-i18n="nav.family">Familie</span>
+              <span class="tile-sub" data-i18n="more.family">Farben, Namen, Haushalte</span>
+            </a>
             <a class="tile" href="#/umfragen">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M6 17V9"/><path d="M12 17V5"/><path d="M18 17v-5"/></svg>
               <span class="tile-title" data-i18n="nav.polls">Umfragen</span>
@@ -138,6 +144,11 @@
             </a>
           </nav>
         </div>
+      </section>
+
+      <!-- Family: colors, names, households -->
+      <section id="view-family" class="view" aria-labelledby="view-title" hidden>
+        <div id="family-content" class="content"></div>
       </section>
 
       <!-- Polls -->

@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   isoOf, addDays, daysBetween, weekdayIndex, yearlyDay, shiftMonth, monthGrid, yearsOn,
-  entriesByDay, upcoming, isIso,
+  entriesByDay, upcoming, isIso, isMultiDay, weekLines,
 } from '../public/js/dates.js';
 
 const ev = (overrides) => ({ title: 'X', date: '2026-10-27', endDate: '', time: '', kind: 'event', repeat: 'none', yearKnown: true, ...overrides });
@@ -74,5 +74,33 @@ describe('entries on days', () => {
       ['2026-10-27', 'Zahnarzt'],
       ['2026-10-30', 'Oma'],
     ]);
+  });
+});
+
+describe('lines for entries over several days', () => {
+  const week = ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01'];
+
+  it('knows which entries last several days', () => {
+    assert.ok(isMultiDay(ev({ date: '2026-10-24', endDate: '2026-10-28' })));
+    assert.ok(!isMultiDay(ev({ date: '2026-10-24' })));
+    assert.ok(!isMultiDay(ev({ repeat: 'yearly', date: '2026-10-24', endDate: '2026-10-28' })));
+  });
+
+  it('cuts a line at the week edges and marks where it really starts and ends', () => {
+    const [line] = weekLines([ev({ title: 'Besuch', date: '2026-10-24', endDate: '2026-10-28' })], week);
+    assert.deepEqual({ from: line.from, to: line.to, starts: line.startsHere, ends: line.endsHere, lane: line.lane }, { from: 0, to: 2, starts: false, ends: true, lane: 0 });
+    const [long] = weekLines([ev({ title: 'Urlaub', date: '2026-10-30', endDate: '2026-11-10' })], week);
+    assert.deepEqual([long.from, long.to, long.startsHere, long.endsHere], [4, 6, true, false]);
+  });
+
+  it('puts overlapping lines on separate rows and reuses free rows', () => {
+    const lines = weekLines([
+      ev({ title: 'A', date: '2026-10-26', endDate: '2026-10-28' }),
+      ev({ title: 'B', date: '2026-10-27', endDate: '2026-10-30' }),
+      ev({ title: 'C', date: '2026-10-29', endDate: '2026-10-31' }),
+      ev({ title: 'Einzeln', date: '2026-10-27' }),
+      ev({ title: 'Anderer Monat', date: '2026-11-03', endDate: '2026-11-05' }),
+    ], week);
+    assert.deepEqual(lines.map((l) => [l.event.title, l.lane]), [['A', 0], ['B', 1], ['C', 0]]);
   });
 });

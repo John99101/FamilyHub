@@ -49,11 +49,13 @@ export function initials(name) {
   return (first + last).toUpperCase();
 }
 
-export function avatar(name, photo, large = false) {
-  const cls = large ? 'avatar avatar-lg' : 'avatar';
-  const fallback = () => el('span', { class: cls, text: initials(name), 'aria-hidden': 'true' });
+/** Round picture (Google photo) or initials; with a color, the initials sit on it and photos get a ring. */
+export function avatar(name, photo, large = false, color = '') {
+  const cls = `${large ? 'avatar avatar-lg' : 'avatar'}${color ? ' colored' : ''}`;
+  const tint = (node) => { if (color) node.style.setProperty('--pc', color); return node; };
+  const fallback = () => tint(el('span', { class: cls, text: initials(name), 'aria-hidden': 'true' }));
   if (!photo || !/^https:\/\/[a-z0-9.-]+\.googleusercontent\.com\//i.test(photo)) return fallback();
-  const img = el('img', { class: cls, src: photo, alt: '', referrerpolicy: 'no-referrer', loading: 'lazy', decoding: 'async' });
+  const img = tint(el('img', { class: cls, src: photo, alt: '', referrerpolicy: 'no-referrer', loading: 'lazy', decoding: 'async' }));
   img.addEventListener('error', () => img.replaceWith(fallback()), { once: true });
   return img;
 }

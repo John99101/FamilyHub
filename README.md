@@ -15,10 +15,20 @@ and French (it follows the browser; changeable in the settings).
   Members delete their own messages, admins any message. Not end to end
   encrypted (the settings page says so).
 - **Kalender** (calendar): month view, appointments (one day, several days,
-  every year) and birthdays with age.
+  every year) and birthdays with age. Each entry is "for" a person and shows
+  in that person's color; entries over several days are a colored line from
+  the first to the last day.
+- **Colors and names**: everyone picks one of 16 colors (no color twice; a
+  free one is given automatically on first sign in). Everyone can give the
+  others their own names ("Mama"); only the person who gave a name sees it.
+- **Households**: admins set up groups (for example "Zürich", "Bei Oma"); a
+  person can be in several. Calendar entries, tasks and polls belong to the
+  whole family or to one household, and each household has its own chat room
+  and weekly overview. Only its members see what is in a household (admins
+  who are not in it do not either). Recipes, contacts and weather stay shared.
 - **Aufgaben** (tasks): quick add, who does it and by when, anyone can tick a
   task off, recently done tasks.
-- **Mehr** (more): **Umfragen** (polls with one or several answers),
+- **Mehr** (more): **Familie** (colors, names, households), **Umfragen** (polls with one or several answers),
   **Rezepte** (family cookbook), **Kontakte** (contacts and emergency info,
   only admins edit), **Wetter** (weather for the family's places, from
   Open-Meteo), Börse, Risiko and Einstellungen.
@@ -64,6 +74,8 @@ Browser (public/)                Firebase (Google, region europe-west3)
 
                                   Functions     cleanupRoom, when a room is deleted:
                                                 deletes its messages
+                                  Functions     cleanupHousehold, when a household is deleted:
+                                                deletes everything inside it
 
  Weather page ──────────────────► Open-Meteo (forecast and place search, no key,
                                   only the rough coordinates of saved places)
@@ -90,7 +102,9 @@ Keys (NGN_API_KEY, ANTHROPIC_API_KEY) live only in Secret Manager.
   the first name of who does them, open poll questions. Never sent: notes,
   chat, contacts, recipes, mail addresses. Titles are marked as data, and
   Claude is told never to follow instructions in them. An empty week makes
-  no request at all. Admins can switch it off (`config/digest`).
+  no request at all. Admins can switch it off (`config/digest`). There is
+  one overview for the whole family and one per household, each made only
+  from that group's own entries and shown only to that group.
 - **Numbers come from code, words from the AI.** `functions/risk.js` computes
   every figure (tested with hand checkable values). `functions/ai-summary.js`
   gives Claude only these numbers, with rules: use only the given figures, no
@@ -110,11 +124,17 @@ Keys (NGN_API_KEY, ANTHROPIC_API_KEY) live only in Secret Manager.
 | `config/watchlist` | `symbols: [..]` (max 10), `updatedAt`, `updatedBy` | members |
 | `config/market` | `enabled` (market on/off), `aiEnabled` (AI summary on/off), `updatedAt`, `updatedBy`; missing values count as on | admins |
 | `config/digest` | `enabled` (weekly overview on/off), `updatedAt`, `updatedBy`; missing counts as on | admins |
-| `people/{uid}` | `name`, `mail`, `photo` as Google gave them (for names in lists) | each person, only their own |
+| `people/{uid}` | `name`, `mail`, `photo` as Google gave them, `color` | each person, only their own |
+| `colors/{color}` | `uid`: who holds the color. The document ID is the color, so it can only exist once | each person for themselves, together with their `people` color; an admin may free the color of someone who left |
+| `nicknames/{uid}` | `names: { mail: name }`, `updatedAt` | only that person; nobody else can read it |
+| `households/{h}` | `name`, `members: [mail]`, `updatedAt`, `updatedBy` | admins (everyone reads) |
+| `households/{h}/events`, `/tasks`, `/polls` | same fields as the family ones | members of the household only (read and write) |
+| `households/{h}/rooms/main` (+ `messages`) | the household's chat room | members of the household only |
+| `households/{h}/digest/current` | the household's weekly overview | Cloud Function only; read by members |
 | `rooms/familie` | `name`, `createdAt`, `last` (preview of the newest message) | an admin once (the app does it); `last`: everyone |
 | `rooms/{roomId}` | `name`, `open`, `members: [mail]`, `createdBy`, `createdByName`, `createdAt`, `last` | creator (rename, members); delete: creator or admin; `last`: people in the room |
 | `rooms/{roomId}/messages/{id}` | `uid`, `name`, `photo`, `text`, `createdAt`, optional `replyTo { id, name, text }`, `reactions { like: [uid], ... }` | the sender (delete: sender or admin); reactions: each person only their own |
-| `events/{id}` | `title`, `date`, `endDate`, `time`, `place`, `note`, `kind` (event, birthday), `repeat` (none, yearly), `yearKnown`, created and updated fields | members; change and delete: creator or admin |
+| `events/{id}` | `title`, `date`, `endDate`, `time`, `place`, `note`, `kind` (event, birthday), `repeat` (none, yearly), `yearKnown`, `person` (mail or empty: whose color), created and updated fields | members; change and delete: creator or admin |
 | `tasks/{id}` | `title`, `note`, `assignee` (mail or empty), `due`, `done`, `doneAt`, `doneBy`, created and updated fields | members; tick off: anyone; change: creator or admin; delete: creator, admin, or anyone once done |
 | `polls/{id}` | `question`, `options` (2 to 10), `multi`, `closed`, `votes { uid: [answer numbers] }`, created fields | members; vote: each person only their own; close and delete: creator or admin |
 | `recipes/{id}` | `title`, `category`, `servings`, `duration`, `ingredients`, `steps`, `source`, created and updated fields | members; change and delete: creator or admin |
@@ -214,14 +234,17 @@ again for the family hub parts on 23 October 2026.
 | :- | :- |
 | Sign in | Google only; verified mail; the rules also check the sign in provider |
 | Access | allow list in `config/access`, checked by the rules on every read and write |
-| Data | deny by default; every field of every write checked (`firestore.rules`, 68 tests); market, AI and overview documents written only by the functions |
+| Data | deny by default; every field of every write checked (`firestore.rules`, 82 tests); market, AI and overview documents written only by the functions |
+| Households | everything inside a household (calendar, tasks, polls, chat, overview) is readable and writable only by its members, admins included; the rules check membership by the path |
+| Nicknames | each person's names for others live in a document only that person can read |
+| Colors | a color is a document named after it, so two people can never hold the same one |
 | Allow list | only admins change it; entries must be lower case mail addresses without duplicates; an admin cannot remove themselves |
 | Private rooms | invisible to everyone not listed, admins included; the rules check every message read and write against the room |
 | Contacts | everyone in the family reads them (they may hold health notes); only admins write; phone links can only dial digits |
 | Page | no HTML is ever built from data (text is always set as text); profile photos only from `googleusercontent.com` |
 | Browser | strict Content Security Policy and headers (below); service worker stores page files only |
 | Keys | only in Secret Manager, each one given only to the function that needs it; nothing secret in git |
-| Server | no public endpoints: three functions run on a timer, one runs when a room is deleted; no automatic retries |
+| Server | no public endpoints: three functions run on a timer, two run when a room or a household is deleted; no automatic retries |
 | AI | risk summary: numbers and stock names only. Weekly overview: the coming week's calendar titles, due tasks and poll questions, never notes, chat, contacts, recipes or mail addresses. Answers are shown as plain text |
 | Weather | the browser asks Open-Meteo with rounded coordinates of saved places only |
 | Costs | budget alert, NGN budget guard, Anthropic spend limit |
@@ -252,10 +275,14 @@ public/                 the website (served by Firebase Hosting)
   index.html            all screens and pages
   css/app.css           styles, mobile first, light and dark
   css/family.css        styles for the family hub pages, dialogs and chat extras
+  css/house.css         styles for colors, nicknames, households and calendar lines
   js/firebase-config.js web config of your project (not secret) and the App Check key
   js/firebase.js        loads the pinned Firebase SDK, emulators on localhost
   js/app.js             sign in, allow list check, navigation, starts the pages
-  js/family-data.js     live copies of the family documents (shared by the pages), names
+  js/family-data.js     live copies of the family and household documents, names, colors
+  js/family-page.js     Familie page (colors, nicknames, households)
+  js/colors.js          the 16 person colors
+  js/groups.js          household filter, form field and badge
   js/home.js            Start page
   js/chat.js            chat: rooms, replies, reactions, "new" markers
   js/calendar.js        Kalender page
@@ -270,7 +297,7 @@ public/                 the website (served by Firebase Hosting)
   js/risk-page.js       Risiko page (risk figures and AI summary)
   js/market-data.js     live copies of the market documents
   js/settings.js        settings
-  js/strings.js         app text in German, English and French (plus strings-family.js)
+  js/strings.js         app text in German, English and French (plus strings-family.js, strings-house.js)
   js/i18n.js            picks the language, fills the page text
   js/ui.js              small helpers (safe text, dates in the chosen language, cards)
   js/theme-boot.js      applies light or dark before the page is drawn
@@ -278,7 +305,7 @@ public/                 the website (served by Firebase Hosting)
   sw.js                 service worker (page files only)
   icons/                own icons (house with heart), made by scripts/make-icons.mjs
 functions/              Cloud Functions (Node.js 22, firebase-functions v2 API)
-  index.js              marketUpdate, riskSummary, weeklyDigest, cleanupRoom
+  index.js              marketUpdate, riskSummary, weeklyDigest, cleanupRoom, cleanupHousehold
   ngn-client.js         small NGN Market client
   market.js             trading days, budget guard, parsing, the market run
   risk.js               risk figures in plain code (volatility, drawdown, beta, ...)
@@ -290,8 +317,9 @@ functions/              Cloud Functions (Node.js 22, firebase-functions v2 API)
   scripts/demo-family-data.mjs   fills the LOCAL emulator with made up family data
 tests/rules.test.js     security rules tests (Firestore emulator)
 tests/rules-family.test.js  security rules tests for the family hub parts
+tests/rules-households.test.js  security rules tests for colors, nicknames and households
 tests/strings.test.js   app text checks (same keys in 3 languages, no dashes, "Mail")
-tests/dates.test.js     calendar day checks (birthdays, several days, 29 February)
+tests/dates.test.js     calendar day checks (birthdays, several days, 29 February, calendar lines)
 scripts/serve-local.mjs local web server with the same headers (for testing)
 scripts/make-icons.mjs  draws the icons
 firebase.json           Hosting, headers, Firestore, Functions, emulators
@@ -309,7 +337,7 @@ deployed function runs on Node.js 22).
 ```
 npm install
 npm --prefix functions install
-npm test               # 13 text and date checks + 73 function tests + 68 rules tests
+npm test               # 17 text and date checks + 76 function tests + 82 rules tests
 npm run emulators      # local site on http://127.0.0.1:5000, Emulator UI on :4000
 npm run demo:market    # (second window) made up market data for the local site
 npm run demo:family    # (second window) made up family data; sign in as chef@example.com

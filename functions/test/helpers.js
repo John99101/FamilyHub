@@ -84,6 +84,9 @@ export function memoryStore(initial = {}) {
     polls: [],
     people: [],
     weekQueries: [],
+    households: [],       // [{ id, name, members }]
+    householdData: {},    // 'households/{id}/' → { events, tasks, polls }
+    householdDigests: {}, // 'households/{id}/' → overview
     ...initial,
   };
   return {
@@ -108,16 +111,21 @@ export function memoryStore(initial = {}) {
     async saveRiskSummary(fields) { state.riskSummary = { ...(state.riskSummary || {}), ...structuredClone(fields) }; },
     async getDigestSwitch() { return state.digestSwitch; },
     // Same filters as the Firestore queries in firestore-store.js.
-    async getFamilyWeekData({ from, to }) {
-      state.weekQueries.push({ from, to });
+    async getFamilyWeekData({ from, to, base = '' }) {
+      state.weekQueries.push(base ? { from, to, base } : { from, to });
+      const src = base ? (state.householdData[base] || { events: [], tasks: [], polls: [] }) : state;
       return structuredClone({
-        events: state.events.filter((e) => e.repeat === 'yearly' || (e.date >= from && e.date <= to)),
-        tasks: state.tasks.filter((t) => t.done === false),
-        polls: state.polls.filter((p) => p.closed === false),
+        events: src.events.filter((e) => e.repeat === 'yearly' || (e.date >= from && e.date <= to)),
+        tasks: src.tasks.filter((t) => t.done === false),
+        polls: src.polls.filter((p) => p.closed === false),
         people: state.people,
       });
     },
-    async saveDigest(fields) { state.digest = { ...(state.digest || {}), ...structuredClone(fields) }; },
+    async saveDigest(fields, base = '') {
+      if (!base) { state.digest = { ...(state.digest || {}), ...structuredClone(fields) }; return; }
+      state.householdDigests[base] = { ...(state.householdDigests[base] || {}), ...structuredClone(fields) };
+    },
+    async listHouseholds() { return structuredClone(state.households); },
   };
 }
 

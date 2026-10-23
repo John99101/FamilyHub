@@ -8,7 +8,7 @@
     "test": "npm run test:strings && npm run test:functions && npm run test:rules",
     "test:strings": "node --test tests/strings.test.js tests/dates.test.js",
     "test:functions": "npm --prefix functions test",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-familyhub \"node --test --test-concurrency=1 tests/rules.test.js tests/rules-family.test.js\"",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-familyhub \"node --test --test-concurrency=1 tests/rules.test.js tests/rules-family.test.js tests/rules-households.test.js\"",
     "emulators": "firebase emulators:exec --only auth,firestore --project demo-familyhub --ui \"node scripts/serve-local.mjs\"",
     "demo:market": "node functions/scripts/demo-stub-data.mjs",
     "icons": "node scripts/make-icons.mjs",

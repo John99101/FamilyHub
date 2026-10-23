@@ -11,6 +11,7 @@
 //   marketHistory/{symbol} { symbol, closes: { 'YYYY-MM-DD': price } } (watchlist and $SPX)
 //   config/digest          { enabled }                              weekly overview switch (admins; missing = on)
 //   digest/current         { weekStart, weekEnd, de, en, fr, ... }  weekly overview (read from events, tasks, polls, people)
+//   households/{h}/...     the same for each household (events, tasks, polls, digest/current)
 import { trimCloses } from './market.js';
 
 const toDate = (v) => (v && typeof v.toDate === 'function' ? v.toDate() : v ? new Date(v) : null);
@@ -104,13 +105,14 @@ export function createFirestoreStore(db) {
      * Calendar entries between from and to (plus all yearly ones), open tasks,
      * open polls and the people list (for first names).
      */
-    async getFamilyWeekData({ from, to }) {
+    async getFamilyWeekData({ from, to, base = '' }) {
       const docs = (snap) => snap.docs.map((d) => d.data());
+      // base: '' for the whole family, 'households/{id}/' for one household.
       const [dated, yearly, tasks, polls, people] = await Promise.all([
-        db.collection('events').where('date', '>=', from).where('date', '<=', to).get(),
-        db.collection('events').where('repeat', '==', 'yearly').get(),
-        db.collection('tasks').where('done', '==', false).get(),
-        db.collection('polls').where('closed', '==', false).get(),
+        db.collection(`${base}events`).where('date', '>=', from).where('date', '<=', to).get(),
+        db.collection(`${base}events`).where('repeat', '==', 'yearly').get(),
+        db.collection(`${base}tasks`).where('done', '==', false).get(),
+        db.collection(`${base}polls`).where('closed', '==', false).get(),
         db.collection('people').get(),
       ]);
       return {
@@ -122,8 +124,13 @@ export function createFirestoreStore(db) {
     },
 
     /** Merges, so a failed attempt keeps the last good overview visible. */
-    async saveDigest(fields) {
-      await db.doc('digest/current').set(fields, { merge: true });
+    async saveDigest(fields, base = '') {
+      await db.doc(`${base}digest/current`).set(fields, { merge: true });
+    },
+
+    async listHouseholds() {
+      const snap = await db.collection('households').get();
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     },
   };
 }

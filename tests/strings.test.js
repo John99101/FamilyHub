@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { STRINGS } from '../public/js/strings.js';
+import { COLOR_IDS } from '../public/js/colors.js';
 
 const LANGS = ['de', 'en', 'fr'];
 const DASHES = /[-‐-―−﹘﹣－]/;
@@ -53,15 +54,25 @@ describe('app text', () => {
     for (const key of used) assert.ok(key in STRINGS.de, `missing key ${key}`);
   });
 
+  it('the page knows the same 16 person colors as the security rules', () => {
+    const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
+    const block = /function palette\(\) \{\s*return \[([^\]]+)\]/.exec(rules);
+    assert.ok(block, 'palette() not found in firestore.rules');
+    const inRules = [...block[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
+    assert.deepEqual(inRules, COLOR_IDS);
+    assert.equal(new Set(COLOR_IDS).size, 16);
+  });
+
   it('every key built in code (categories, groups, reactions, weather) exists', () => {
     const built = [
       ...['main', 'starter', 'dessert', 'baking', 'breakfast', 'drink', 'other'].map((c) => `recipes.cat.${c}`),
       ...['emergency', 'family', 'health', 'service', 'other'].map((g) => `contacts.group.${g}`),
       ...['like', 'love', 'laugh', 'wow', 'sad', 'thanks'].map((r) => `chat.react.${r}`),
       ...['morning', 'day', 'evening'].flatMap((k) => [`home.${k}`, `home.${k}Name`]),
+      ...COLOR_IDS.map((c) => `color.${c}`),
     ];
     // Plus every quoted key such as 'weather.clear' or 'settings.digestOn' in the page code.
-    const prefixes = 'cal|tasks|polls|recipes|contacts|weather|rooms|chat|home|settings|day|nav|common|more|form';
+    const prefixes = 'cal|tasks|polls|recipes|contacts|weather|rooms|chat|home|settings|day|nav|common|more|form|family|house|color';
     const jsDir = new URL('../public/js/', import.meta.url);
     for (const file of readdirSync(jsDir).filter((f) => f.endsWith('.js') && !f.startsWith('strings'))) {
       const src = readFileSync(new URL(file, jsDir), 'utf8');

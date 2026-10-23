@@ -8,7 +8,7 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { createFirestoreStore } from '../firestore-store.js';
-import { runWeeklyDigest, addDays } from '../digest.js';
+import { runAllDigests, addDays } from '../digest.js';
 
 process.env.FIRESTORE_EMULATOR_HOST ||= '127.0.0.1:8080';
 const PROJECT = 'demo-familyhub';
@@ -27,8 +27,20 @@ const ANNA = ['demo_anna', 'Anna Beispiel'];
 const BEN = ['demo_ben', 'Ben Beispiel'];
 
 await db.doc('config/access').set({ admins: ['chef@example.com'], members: ['anna@example.com', 'ben@example.com'] });
-await db.doc('people/demo_anna').set({ name: 'Anna Beispiel', mail: 'anna@example.com', photo: '', updatedAt: ago(1) });
-await db.doc('people/demo_ben').set({ name: 'Ben Beispiel', mail: 'ben@example.com', photo: '', updatedAt: ago(1) });
+await db.doc('people/demo_anna').set({ name: 'Anna Beispiel', mail: 'anna@example.com', photo: '', color: 'pink', updatedAt: ago(1) });
+await db.doc('people/demo_ben').set({ name: 'Ben Beispiel', mail: 'ben@example.com', photo: '', color: 'sky', updatedAt: ago(1) });
+await db.doc('colors/pink').set({ uid: 'demo_anna' });
+await db.doc('colors/sky').set({ uid: 'demo_ben' });
+
+// ---------- households (chef@example.com is in "Zürich", not in "Bei Oma") ----------
+await db.doc('households/h_zh').set({ name: 'Zürich', members: ['chef@example.com', 'anna@example.com'], updatedAt: ago(100), updatedBy: 'chef@example.com' });
+await db.doc('households/h_oma').set({ name: 'Bei Oma', members: ['ben@example.com'], updatedAt: ago(100), updatedBy: 'chef@example.com' });
+await db.doc('households/h_zh/rooms/main').set({ name: 'Zürich', createdAt: ago(100), last: { uid: 'demo_anna', name: 'Anna Beispiel', text: 'Wer kauft Brot?', at: ago(15) } });
+await db.doc('households/h_zh/rooms/main/messages/z1').set({ uid: 'demo_anna', name: 'Anna Beispiel', photo: '', text: 'Wer kauft Brot?', createdAt: ago(15) });
+await db.doc('households/h_oma/events/o1').set({
+  title: 'Nur im Haushalt Bei Oma', date: today, endDate: '', time: '', place: '', note: '', kind: 'event', repeat: 'none',
+  yearKnown: true, person: 'ben@example.com', createdBy: 'demo_ben', createdByName: 'Ben Beispiel', createdAt: ago(100), updatedAt: ago(100),
+});
 
 // ---------- chat ----------
 const msg = (uid, name, text, minutes, extra = {}) => ({ uid, name, photo: '', text, createdAt: ago(minutes), ...extra });
@@ -47,9 +59,22 @@ await db.doc('rooms/nur-ben').set({ name: 'Nur Ben und Anna', open: false, membe
 const event = (id, fields) => db.doc(`events/${id}`).set({
   endDate: '', time: '', place: '', note: '', kind: 'event', repeat: 'none', yearKnown: true, ...by(...ANNA), updatedAt: ago(5), ...fields,
 });
-await event('ev1', { title: 'Zahnarzt Tim', date: today, time: '09:30', place: 'Praxis Dr. Müller' });
+await event('ev1', { title: 'Zahnarzt Tim', date: today, time: '09:30', place: 'Praxis Dr. Müller', person: 'ben@example.com' });
 await event('ev2', { title: 'Elternabend', date: day(1), time: '19:00', place: 'Schule' });
-await event('ev3', { title: 'Besuch bei Oma', date: day(3), endDate: day(5), note: 'Kuchen nicht vergessen' });
+await event('ev3', { title: 'Besuch bei Oma', date: day(3), endDate: day(5), note: 'Kuchen nicht vergessen', person: 'anna@example.com' });
+await event('ev9', { title: 'Ben im Zeltlager', date: day(4), endDate: day(9), person: 'ben@example.com' });
+await event('ev10', { title: 'Messe', date: day(-2), endDate: day(1), person: '' });
+const hEvent = (id, fields) => db.doc(`households/h_zh/events/${id}`).set({
+  endDate: '', time: '', place: '', note: '', kind: 'event', repeat: 'none', yearKnown: true, person: '', ...by(...ANNA), updatedAt: ago(5), ...fields,
+});
+await hEvent('z1', { title: 'Elternabend Zürich', date: day(2), time: '19:00', person: 'anna@example.com' });
+await hEvent('z2', { title: 'Skiferien', date: day(8), endDate: day(13), person: 'chef@example.com' });
+await db.doc('households/h_zh/tasks/zt1').set({
+  title: 'Brot kaufen', note: '', assignee: 'anna@example.com', due: day(0), done: false, doneAt: null, doneBy: '', ...by(...ANNA), updatedAt: ago(5),
+});
+await db.doc('households/h_zh/polls/zp1').set({
+  question: 'Raclette oder Fondue?', options: ['Raclette', 'Fondue'], multi: false, closed: false, votes: { demo_anna: [1] }, ...by(...ANNA),
+});
 await event('ev4', { title: 'Oma', kind: 'birthday', repeat: 'yearly', date: `1946-${day(2).slice(5)}` });
 await event('ev5', { title: 'Ben', kind: 'birthday', repeat: 'yearly', date: `2014-${day(12).slice(5)}`, ...by(...BEN) });
 await event('ev6', { title: 'Onkel Paul', kind: 'birthday', repeat: 'yearly', date: `2000-${day(20).slice(5)}`, yearKnown: false });
@@ -118,6 +143,7 @@ const fakeClaude = {
   }) } },
 };
 // The overview is about the 7 days after the run, so it is "run" yesterday evening.
-const result = await runWeeklyDigest({ anthropic: fakeClaude, store: createFirestoreStore(db), now: new Date(Date.now() - 24 * 3600 * 1000), logger: { info: () => {}, warn: console.warn } });
-console.log('Demo family data written. Weekly overview:', result.kind);
+await db.doc('households/h_zh/digest/current').delete();
+const result = await runAllDigests({ anthropic: fakeClaude, store: createFirestoreStore(db), now: new Date(Date.now() - 24 * 3600 * 1000), logger: { info: () => {}, warn: console.warn } });
+console.log('Demo family data written. Weekly overviews:', result.results.map((r) => `${r.base || 'family'} ${r.kind}`).join(', '));
 process.exit(0);

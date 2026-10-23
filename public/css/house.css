@@ -1,0 +1,78 @@
+/* FamilyHub styles for person colors, nicknames and households (version 1.3).
+   A person color arrives as the CSS variable --pc on the element. */
+
+.person-dot {
+  display: inline-block; flex: 0 0 auto; width: 11px; height: 11px; border-radius: 50%;
+  background: var(--pc, #8a94a0);
+}
+
+/* Text in a person color stays readable in light and dark. */
+.who { display: inline-flex; align-items: center; gap: 4px; color: color-mix(in srgb, var(--pc, var(--muted)) 75%, var(--text)); font-weight: 600; }
+.who .person-dot { width: 9px; height: 9px; }
+
+.house-badge {
+  display: inline-block; vertical-align: middle; margin-left: 6px;
+  font-size: 11.5px; font-weight: 700; line-height: 1.5; padding: 0 7px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted); white-space: nowrap;
+}
+
+/* ---------- Family page ---------- */
+
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 10px; }
+.swatch {
+  width: 42px; height: 42px; border-radius: 50%; border: 0; padding: 0; justify-self: center;
+  background: var(--pc); color: #fff; display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: inset 0 0 0 2px rgb(0 0 0 / 8%);
+}
+.swatch svg { width: 22px; height: 22px; stroke-width: 3; }
+.swatch.mine { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--pc); }
+.swatch.taken { opacity: .28; cursor: not-allowed; }
+.swatch:not(:disabled):hover { transform: scale(1.06); }
+
+.person-list { list-style: none; margin: 0; padding: 0; }
+.person-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+.person-row:first-child { border-top: 0; }
+.person-row .person-dot { width: 14px; height: 14px; }
+.person-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.person-name { font-weight: 700; overflow-wrap: anywhere; }
+
+.household-list { list-style: none; margin: 0; padding: 0; }
+.household { padding: 10px 0; border-top: 1px solid var(--border); }
+.household:first-child { border-top: 0; }
+.household-head { display: flex; align-items: center; gap: 8px; }
+.household-name { font-weight: 700; overflow-wrap: anywhere; }
+.household-head .btn-link { margin-left: auto; }
+.household-head .badge { margin-left: 0; }
+.member-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.member-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px;
+  background: var(--surface-2); font-size: 13px; font-weight: 600;
+}
+
+/* ---------- calendar: weeks with colored lines ---------- */
+
+.month-grid { display: flex; flex-direction: column; gap: 2px; }
+.week-names, .week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.week { position: relative; }
+.week .day-cell { padding-bottom: calc(4px + var(--lanes, 0) * 7px); }
+.week-lines { position: absolute; inset: 0; pointer-events: none; }
+.line {
+  position: absolute; box-sizing: border-box; height: 5px;
+  bottom: calc(4px + var(--lane) * 7px);
+  left: calc(var(--from) * ((100% - 12px) / 7 + 2px));
+  width: calc(var(--span) * ((100% - 12px) / 7 + 2px) - 2px);
+  background: var(--pc); background-clip: padding-box;
+}
+.line.starts { border-left: 5px solid transparent; border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+.line.ends { border-right: 5px solid transparent; border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+.dot { background: var(--pc, var(--primary)); }
+
+/* Entries carry the color of the person they are for. */
+.entry { border-left: 4px solid var(--pc, transparent); padding-left: 10px; border-radius: 4px; }
+.colored-line { border-left: 4px solid var(--pc, transparent); padding-left: 8px; }
+
+/* ---------- chat ---------- */
+
+.msg-name { color: color-mix(in srgb, var(--pc, var(--primary)) 80%, var(--text)); }
+.avatar.colored { background: var(--pc); color: #fff; }
+img.avatar.colored { box-shadow: 0 0 0 2px var(--pc); }

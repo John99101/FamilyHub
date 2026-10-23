@@ -17,6 +17,8 @@
 // (digest/current). If nothing is planned, nothing is sent.
 //
 // cleanupRoom: when a chat room is deleted in the app, deletes its messages.
+// cleanupHousehold: when an admin deletes a household, deletes everything in
+// it (calendar, tasks, polls, chat room with messages, weekly overview).
 //
 // The browser only ever reads Firestore; it never talks to NGN Market or
 // Anthropic and never sees a key. Keys live only in Secret Manager.
@@ -31,7 +33,7 @@ import { createNgnClient } from './ngn-client.js';
 import { createFirestoreStore } from './firestore-store.js';
 import { runMarketUpdate } from './market.js';
 import { runRiskSummary } from './ai-summary.js';
-import { runWeeklyDigest, DIGEST_TIME_ZONE } from './digest.js';
+import { runAllDigests, DIGEST_TIME_ZONE } from './digest.js';
 
 const NGN_API_KEY = defineSecret('NGN_API_KEY');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -99,7 +101,8 @@ export const weeklyDigest = onSchedule(
   },
   async () => {
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value(), maxRetries: 1, timeout: 180000 });
-    const result = await runWeeklyDigest({
+    // The family overview, then one per household.
+    const result = await runAllDigests({
       anthropic,
       store: createFirestoreStore(getFirestore()),
       now: new Date(),
@@ -119,5 +122,16 @@ export const cleanupRoom = onDocumentDeleted(
     const db = getFirestore();
     await db.recursiveDelete(db.collection('rooms').doc(roomId).collection('messages'));
     logger.info('Messages of a deleted room removed', { roomId });
+  },
+);
+
+export const cleanupHousehold = onDocumentDeleted(
+  { document: 'households/{householdId}', region: 'europe-west3', memory: '256MiB', timeoutSeconds: 300, maxInstances: 1 },
+  async (event) => {
+    const { householdId } = event.params;
+    const db = getFirestore();
+    // Deletes every collection below the (already deleted) household document.
+    await db.recursiveDelete(db.collection('households').doc(householdId));
+    logger.info('Contents of a deleted household removed', { householdId });
   },
 );

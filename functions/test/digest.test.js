@@ -4,7 +4,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import Anthropic from '@anthropic-ai/sdk';
 import {
-  runWeeklyDigest, collectWeek, buildDigestPrompt, buildDigestRequest, parseDigest,
+  runWeeklyDigest, runAllDigests, collectWeek, buildDigestPrompt, buildDigestRequest, parseDigest,
   weekRange, berlinDay, yearlyDay, addDays, dayWords, DIGEST_MAX_CHARS,
 } from '../digest.js';
 import { AI_MODEL } from '../ai-summary.js';
@@ -239,5 +239,58 @@ describe('the Sunday run', () => {
     assert.equal(store.state.digest.weekStart, '2026-10-19');
     assert.equal(store.state.digest.de, 'Alt');
     assert.deepEqual(store.state.digest.lastError, { type: 'api', status: 529, name: 'Error' });
+  });
+});
+
+describe('households', () => {
+  const zurich = {
+    events: [event({ title: 'Elternabend Zürich', date: '2026-10-28', time: '19:00' })],
+    tasks: [task({ title: 'Zimmer aufräumen', due: '2026-10-27', assignee: 'ben@example.com' })],
+    polls: [],
+  };
+
+  it('writes the family overview and one per household, each from its own entries', async () => {
+    const store = memoryStore({
+      ...familyData(),
+      households: [{ id: 'h1', name: 'Zürich', members: ['anna@example.com'] }, { id: 'h2', name: 'Leer', members: ['ben@example.com'] }],
+      householdData: { 'households/h1/': zurich },
+    });
+    const anthropic = stubAnthropic();
+    const result = await runAllDigests({ anthropic, store, now: SUNDAY_RUN, logger: silentLogger() });
+    assert.deepEqual(result.results.map((r) => [r.base, r.kind]), [['', 'written'], ['households/h1/', 'written'], ['households/h2/', 'empty']]);
+    assert.equal(anthropic.calls.length, 2);
+    const familyPrompt = anthropic.calls[0].messages[0].content;
+    const householdPrompt = anthropic.calls[1].messages[0].content;
+    assert.match(familyPrompt, /the whole family/);
+    assert.ok(!familyPrompt.includes('Elternabend Zürich'), 'household entries stay out of the family overview');
+    assert.match(householdPrompt, /household \\"Zürich\\"/);
+    assert.match(householdPrompt, /Elternabend Zürich/);
+    assert.ok(!householdPrompt.includes('Zahnarzt Tim'), 'family entries stay out of the household overview');
+    assert.match(householdPrompt, /"who": "Ben"/);
+    assert.equal(store.state.householdDigests['households/h1/'].de, GOOD.de);
+    assert.equal(store.state.householdDigests['households/h2/'].empty, true);
+    assert.equal(store.state.digest.de, GOOD.de);
+  });
+
+  it('one failing group does not stop the others', async () => {
+    const store = memoryStore({
+      ...familyData(),
+      households: [{ id: 'h1', name: 'Zürich', members: ['anna@example.com'] }],
+      householdData: { 'households/h1/': zurich },
+    });
+    let n = 0;
+    const anthropic = stubAnthropic(() => { n += 1; if (n === 1) { const e = new Error('overloaded'); e.status = 529; throw e; } return fakeResponse(GOOD); });
+    const result = await runAllDigests({ anthropic, store, now: SUNDAY_RUN, logger: silentLogger() });
+    assert.deepEqual(result.results.map((r) => r.kind), ['error', 'written']);
+  });
+
+  it('the admin switch stops all overviews; households without members are skipped', async () => {
+    const off = memoryStore({ ...familyData(), digestSwitch: { enabled: false }, households: [{ id: 'h1', name: 'Zürich', members: ['anna@example.com'] }] });
+    const anthropic = stubAnthropic();
+    assert.equal((await runAllDigests({ anthropic, store: off, now: SUNDAY_RUN, logger: silentLogger() })).kind, 'skip');
+    assert.equal(anthropic.calls.length, 0);
+    const empty = memoryStore({ ...familyData(), households: [{ id: 'h9', name: 'Niemand', members: [] }] });
+    const result = await runAllDigests({ anthropic, store: empty, now: SUNDAY_RUN, logger: silentLogger() });
+    assert.deepEqual(result.results.map((r) => r.base), ['']);
   });
 });

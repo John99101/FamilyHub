@@ -19,8 +19,9 @@ import { createPolls } from './polls.js';
 import { createRecipes } from './recipes.js';
 import { createContacts } from './contacts.js';
 import { createWeather } from './weather.js';
+import { createFamilyPage } from './family-page.js';
 
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();
@@ -33,6 +34,7 @@ const ROUTES = {
   kalender: { title: 'nav.calendar', view: 'view-calendar', page: 'calendar', tab: 'kalender' },
   aufgaben: { title: 'nav.tasks', view: 'view-tasks', page: 'tasks', tab: 'aufgaben' },
   mehr: { title: 'nav.more', view: 'view-more', tab: 'mehr' },
+  familie: { title: 'nav.family', view: 'view-family', page: 'family', tab: 'mehr', back: true },
   umfragen: { title: 'nav.polls', view: 'view-polls', page: 'polls', tab: 'mehr', back: true },
   rezepte: { title: 'nav.recipes', view: 'view-recipes', page: 'recipes', tab: 'mehr', back: true },
   kontakte: { title: 'nav.contacts', view: 'view-contacts', page: 'contacts', tab: 'mehr', back: true },
@@ -140,6 +142,7 @@ onAuthStateChanged(auth, async (user) => {
       if (wasAdmin !== session.isAdmin) {
         pages.chat.onRoleChange();
         pages.contacts.onRoleChange();
+        pages.family.onRoleChange();
       }
     }
   }, (err) => {
@@ -164,6 +167,7 @@ function startApp() {
     calendar,
     tasks,
     weather,
+    family: createFamilyPage(familyData),
     polls: createPolls(familyData),
     recipes: createRecipes(familyData),
     contacts: createContacts(familyData),

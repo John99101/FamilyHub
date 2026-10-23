@@ -1,41 +1,53 @@
 // Live copies of the family documents in Firestore, shared by the pages
 // (Start, calendar, tasks, polls, chat rooms, weather) so each is read once.
 // Recipes and contacts are only loaded when their page is opened.
+//
+// Calendar entries, tasks and polls come from the whole family (top level)
+// and from each household this person is in (households/{id}/...). Every
+// row carries `household` ('' for the whole family) and `path` (where it is
+// stored), so the pages can show, filter and change them.
 import {
-  db, collection, doc, query, where, orderBy, limit, onSnapshot, setDoc, serverTimestamp,
+  db, collection, doc, query, where, orderBy, limit, onSnapshot, setDoc, writeBatch, serverTimestamp,
 } from './firebase.js';
 import { todayIso, addDays } from './dates.js';
+import { COLOR_IDS, hexOf, NEUTRAL } from './colors.js';
 
 export const MAIN_ROOM = 'familie';
 // Multi day entries may start up to this many days before the day shown.
 export const EVENT_LOOKBACK_DAYS = 62;
-
-const rows = (snap) => snap.docs.map((d) => ({
-  id: d.id,
-  ...d.data({ serverTimestamps: 'estimate' }),
-  pending: d.metadata.hasPendingWrites,
-}));
+const SCOPED = ['events', 'yearly', 'tasksOpen', 'tasksDone', 'polls'];
 
 export const toDate = (v) => (v && typeof v.toDate === 'function' ? v.toDate() : v ? new Date(v) : null);
 export const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
 
+/** Where a group keeps its entries: '' for the whole family, 'households/{id}/' for a household. */
+export const baseOf = (household) => (household ? `households/${household}/` : '');
+
 export function createFamilyData(session) {
+  const uid = session.user.uid;
   const state = {
     events: [],      // single and multi day entries from EVENT_LOOKBACK_DAYS ago on
     yearly: [],      // birthdays and other yearly entries
     tasksOpen: [],
-    tasksDone: [],   // the 20 most recently done
-    polls: [],       // the 30 newest
+    tasksDone: [],   // the 20 most recently done (per group)
+    polls: [],       // the 30 newest (per group)
     places: [],
     people: [],
-    rooms: [],       // rooms this person may use, main room first, then by newest message
-    digest: null,
+    colors: {},      // color → uid of the person holding it
+    nicknames: {},   // mail → name this person gave them (only they can read it)
+    households: [],  // all households (everyone sees which exist and who is in them)
+    rooms: [],       // rooms this person may use, main room first, then household rooms, then by newest message
+    digest: null,    // the family's weekly overview
+    householdDigests: {}, // household id → its weekly overview
     digestSwitch: null,
     loaded: {},
   };
   const listeners = new Set();
+  const scopes = { '': {} };          // group → { events: [...], ... }
+  const householdStops = new Map();  // household id → stop functions
   const roomParts = { main: [], open: [], mine: [] };
   const roomPartLoaded = { main: false, open: false, mine: false };
+  const householdRooms = {};         // household id → room or null
   let queued = false;
 
   function notify() {
@@ -49,110 +61,274 @@ export function createFamilyData(session) {
 
   const onError = (what) => (err) => console.warn(`Reading ${what} failed`, err.code);
 
-  function watch(key, ref, map = rows) {
-    return onSnapshot(ref, (snap) => {
-      state[key] = map(snap);
-      state.loaded[key] = true;
-      if (key === 'people') ensureOwnProfile();
-      notify();
-    }, onError(key));
+  const rowsOf = (snap, household, col) => snap.docs.map((d) => ({
+    id: d.id,
+    ...d.data({ serverTimestamps: 'estimate' }),
+    household,
+    path: `${baseOf(household)}${col}/${d.id}`,
+    pending: d.metadata.hasPendingWrites,
+  }));
+
+  function mergeScoped() {
+    for (const key of SCOPED) state[key] = Object.values(scopes).flatMap((s) => s[key] || []);
   }
 
-  function watchDoc(key, ref) {
-    return watch(key, ref, (snap) => (snap.exists() ? { id: snap.id, ...snap.data({ serverTimestamps: 'estimate' }) } : null));
+  // ---------- a group's calendar, tasks and polls ----------
+
+  function watchGroup(household) {
+    const base = baseOf(household);
+    const scope = (scopes[household] = scopes[household] || {});
+    const since = addDays(todayIso(), -EVENT_LOOKBACK_DAYS);
+    const put = (key, col, filter) => (snap) => {
+      scope[key] = rowsOf(snap, household, col).filter(filter || (() => true));
+      if (!household) state.loaded[key] = true;
+      mergeScoped();
+      notify();
+    };
+    return [
+      onSnapshot(query(collection(db, `${base}events`), where('date', '>=', since)), put('events', 'events', (e) => e.repeat !== 'yearly'), onError(`${base}events`)),
+      onSnapshot(query(collection(db, `${base}events`), where('repeat', '==', 'yearly')), put('yearly', 'events'), onError(`${base}yearly`)),
+      onSnapshot(query(collection(db, `${base}tasks`), where('done', '==', false)), put('tasksOpen', 'tasks'), onError(`${base}tasks`)),
+      onSnapshot(query(collection(db, `${base}tasks`), where('done', '==', true), orderBy('doneAt', 'desc'), limit(20)), put('tasksDone', 'tasks'), onError(`${base}done tasks`)),
+      onSnapshot(query(collection(db, `${base}polls`), orderBy('createdAt', 'desc'), limit(30)), put('polls', 'polls'), onError(`${base}polls`)),
+    ];
   }
+
+  // ---------- households this person is in ----------
+
+  function syncHouseholds() {
+    const mine = new Set(state.households.filter((h) => (h.members || []).includes(session.mail)).map((h) => h.id));
+    for (const [id, stops] of householdStops) {
+      if (mine.has(id)) continue;
+      for (const s of stops) s();
+      householdStops.delete(id);
+      delete scopes[id];
+      delete householdRooms[id];
+      delete state.householdDigests[id];
+    }
+    for (const id of mine) {
+      if (householdStops.has(id)) continue;
+      const stops = watchGroup(id);
+      stops.push(onSnapshot(doc(db, 'households', id, 'rooms', 'main'), (snap) => {
+        if (snap.exists()) {
+          householdRooms[id] = { ...snap.data({ serverTimestamps: 'estimate' }), id: `h:${id}`, household: id, path: `households/${id}/rooms/main` };
+        } else {
+          householdRooms[id] = null;
+          // The room is set up by the first member who opens the app after the household was created.
+          const h = state.households.find((x) => x.id === id);
+          setDoc(doc(db, 'households', id, 'rooms', 'main'), { name: String(h?.name || 'Haushalt').slice(0, 40), createdAt: serverTimestamp() })
+            .catch(() => { /* someone else was faster, or no access any more */ });
+        }
+        mergeRooms();
+      }, onError(`household room ${id}`)));
+      stops.push(onSnapshot(doc(db, 'households', id, 'digest', 'current'), (snap) => {
+        if (snap.exists()) state.householdDigests[id] = snap.data({ serverTimestamps: 'estimate' });
+        else delete state.householdDigests[id];
+        notify();
+      }, onError(`household overview ${id}`)));
+      householdStops.set(id, stops);
+    }
+    mergeScoped();
+    mergeRooms();
+  }
+
+  // ---------- rooms ----------
 
   function mergeRooms() {
     const byId = new Map();
-    for (const room of [...roomParts.main, ...roomParts.open, ...roomParts.mine]) byId.set(room.id, room);
+    for (const room of [...roomParts.main, ...roomParts.open, ...roomParts.mine]) {
+      byId.set(room.id, { ...room, household: '', path: `rooms/${room.id}` });
+    }
+    for (const [hid, room] of Object.entries(householdRooms)) {
+      if (!room) continue;
+      const h = state.households.find((x) => x.id === hid);
+      byId.set(room.id, { ...room, name: h ? h.name : room.name });
+    }
     const lastMs = (r) => toDate(r.last?.at)?.getTime() || toDate(r.createdAt)?.getTime() || 0;
-    state.rooms = [...byId.values()].sort((a, b) => {
-      if (a.id === MAIN_ROOM) return -1;
-      if (b.id === MAIN_ROOM) return 1;
-      return lastMs(b) - lastMs(a) || String(a.name).localeCompare(String(b.name));
-    });
-    // Only "loaded" once all three lists answered, so a closed room is never missed at the start.
-    state.loaded.rooms = roomPartLoaded.main && roomPartLoaded.open && roomPartLoaded.mine;
+    const rank = (r) => (r.id === MAIN_ROOM ? 0 : r.household ? 1 : 2);
+    state.rooms = [...byId.values()].sort((a, b) => rank(a) - rank(b) || lastMs(b) - lastMs(a) || String(a.name).localeCompare(String(b.name)));
+    // Only "loaded" once all lists answered (also every household room), so no room is missed at the start.
+    const mine = state.households.filter((h) => (h.members || []).includes(session.mail)).map((h) => h.id);
+    state.loaded.rooms = roomPartLoaded.main && roomPartLoaded.open && roomPartLoaded.mine
+      && state.loaded.households === true && mine.every((id) => id in householdRooms);
     notify();
   }
 
   function watchRooms(part, ref, isDoc = false) {
     return onSnapshot(ref, (snap) => {
       if (isDoc) roomParts[part] = snap.exists() ? [{ id: snap.id, ...snap.data({ serverTimestamps: 'estimate' }) }] : [];
-      else roomParts[part] = rows(snap);
+      else roomParts[part] = snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
       roomPartLoaded[part] = true;
       mergeRooms();
     }, onError(`rooms (${part})`));
   }
 
-  // Everyone keeps their own name and photo in people/{uid}, so others see names in lists.
+  // ---------- own profile and color ----------
+
+  const claimName = typeof session.claims.name === 'string' ? session.claims.name : '';
+  const claimPhoto = typeof session.claims.picture === 'string' ? session.claims.picture : '';
+  const profileFields = () => ({ name: claimName, mail: session.mail, photo: claimPhoto, updatedAt: serverTimestamp() });
+  const me = () => state.people.find((p) => p.id === uid) || null;
+
+  // Everyone keeps their own name, photo and color in people/{uid}, so others see them in lists.
   let profileChecked = false;
   function ensureOwnProfile() {
-    if (profileChecked) return;
+    if (profileChecked || !state.loaded.people) return;
     profileChecked = true;
-    const name = typeof session.claims.name === 'string' ? session.claims.name : '';
-    const photo = typeof session.claims.picture === 'string' ? session.claims.picture : '';
-    const mine = state.people.find((p) => p.id === session.user.uid);
-    if (mine && mine.name === name && mine.photo === photo && mine.mail === session.mail) return;
-    setDoc(doc(db, 'people', session.user.uid), { name, mail: session.mail, photo, updatedAt: serverTimestamp() })
+    const p = me();
+    if (p && p.name === claimName && p.photo === claimPhoto && p.mail === session.mail) return;
+    // merge keeps the color
+    setDoc(doc(db, 'people', uid), profileFields(), { merge: true })
       .catch((err) => console.warn('Saving the profile failed', err.code));
   }
 
-  const since = addDays(todayIso(), -EVENT_LOOKBACK_DAYS);
+  /** Takes a color: frees the old one and writes the lock and the profile together. */
+  async function setMyColor(color) {
+    const old = me()?.color;
+    const batch = writeBatch(db);
+    if (old && old !== color && state.colors[old] === uid) batch.delete(doc(db, 'colors', old));
+    batch.set(doc(db, 'colors', color), { uid });
+    batch.set(doc(db, 'people', uid), { ...profileFields(), color }, { merge: true });
+    await batch.commit();
+  }
+
+  // The first time, everyone gets the first free color.
+  let colorTries = 0;
+  async function ensureColor() {
+    if (!state.loaded.people || !state.loaded.colors || colorTries >= 3) return;
+    const p = me();
+    if (p && p.color && state.colors[p.color] === uid) return;
+    const free = COLOR_IDS.find((c) => !state.colors[c]);
+    if (!free) return; // all 16 taken: this person stays grey
+    colorTries += 1;
+    try {
+      await setMyColor(free);
+    } catch (err) {
+      console.warn('Taking a color failed', err.code); // someone took it a moment earlier; the next update tries again
+    }
+  }
+
+  // ---------- start ----------
+
+  const watchList = (key, ref, map, after) => onSnapshot(ref, (snap) => {
+    state[key] = map(snap);
+    state.loaded[key] = true;
+    if (after) after();
+    notify();
+  }, onError(key));
+  const plain = (snap) => snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
+  const single = (snap) => (snap.exists() ? { id: snap.id, ...snap.data({ serverTimestamps: 'estimate' }) } : null);
+
   const stops = [
-    watch('events', query(collection(db, 'events'), where('date', '>=', since)),
-      (snap) => rows(snap).filter((e) => e.repeat !== 'yearly')),
-    watch('yearly', query(collection(db, 'events'), where('repeat', '==', 'yearly'))),
-    watch('tasksOpen', query(collection(db, 'tasks'), where('done', '==', false))),
-    watch('tasksDone', query(collection(db, 'tasks'), where('done', '==', true), orderBy('doneAt', 'desc'), limit(20))),
-    watch('polls', query(collection(db, 'polls'), orderBy('createdAt', 'desc'), limit(30))),
-    watch('places', collection(db, 'places')),
-    watch('people', collection(db, 'people')),
-    watchDoc('digest', doc(db, 'digest', 'current')),
-    watchDoc('digestSwitch', doc(db, 'config', 'digest')),
+    ...watchGroup(''),
+    watchList('places', collection(db, 'places'), plain),
+    watchList('people', collection(db, 'people'), plain, () => { ensureOwnProfile(); ensureColor(); }),
+    watchList('colors', collection(db, 'colors'), (snap) => Object.fromEntries(snap.docs.map((d) => [d.id, d.data().uid])), ensureColor),
+    watchList('nicknames', doc(db, 'nicknames', uid), (snap) => (snap.exists() && snap.data().names) || {}),
+    watchList('households', collection(db, 'households'), plain, syncHouseholds),
+    watchList('digest', doc(db, 'digest', 'current'), single),
+    watchList('digestSwitch', doc(db, 'config', 'digest'), single),
     watchRooms('main', doc(db, 'rooms', MAIN_ROOM), true),
     watchRooms('open', query(collection(db, 'rooms'), where('open', '==', true))),
     watchRooms('mine', query(collection(db, 'rooms'), where('members', 'array-contains', session.mail))),
   ];
 
-  // ---------- names ----------
+  // ---------- names and colors ----------
 
   function personByMail(mail) {
     return state.people.find((p) => p.mail === mail) || null;
   }
 
-  /** Display name for a mail address on the allow list (the part before @ if the person never signed in). */
-  function nameForMail(mail) {
+  /** The name as Google gave it (the part before @ if the person never signed in). */
+  function realNameForMail(mail) {
     if (!mail) return '';
     const p = personByMail(mail);
     return (p && p.name) || mail.split('@')[0];
   }
 
-  function nameForUid(uid) {
-    const p = state.people.find((x) => x.id === uid);
-    return p ? p.name || p.mail.split('@')[0] : '';
+  /** The name this person sees: their own nickname for someone, else the real name. */
+  function nameForMail(mail) {
+    if (!mail) return '';
+    if (mail !== session.mail && state.nicknames[mail]) return state.nicknames[mail];
+    return realNameForMail(mail);
   }
 
-  /** Everyone on the allow list, with names where known, sorted by name. */
+  /** Short form for tight places: the full nickname, or the first name. */
+  function shortNameForMail(mail) {
+    if (!mail) return '';
+    if (mail !== session.mail && state.nicknames[mail]) return state.nicknames[mail];
+    return firstName(realNameForMail(mail));
+  }
+
+  const mailForUid = (id) => state.people.find((x) => x.id === id)?.mail || '';
+  const nameForUid = (id, fallback = '') => nameForMail(mailForUid(id)) || fallback;
+  const shortNameForUid = (id, fallback = '') => shortNameForMail(mailForUid(id)) || firstName(fallback);
+
+  /** For texts that only kept a Google name (for example "done by"): find the person by that name. */
+  function nameForGoogleName(name) {
+    const p = name ? state.people.find((x) => x.name === name) : null;
+    return p ? nameForMail(p.mail) : name;
+  }
+
+  function colorForMail(mail) {
+    const p = mail ? personByMail(mail) : null;
+    return p && p.color && state.colors[p.color] === p.id ? hexOf(p.color) : NEUTRAL;
+  }
+  const colorForUid = (id) => colorForMail(mailForUid(id));
+
+  /** Everyone on the allow list, with names and colors where known, sorted by name. */
   function family() {
     const access = session.access || {};
     const mails = [...new Set([...(access.admins || []), ...(access.members || [])])];
     return mails
       .map((mail) => {
         const p = personByMail(mail);
-        return { mail, name: nameForMail(mail), uid: p ? p.id : null, photo: p ? p.photo : '' };
+        return {
+          mail, name: nameForMail(mail), realName: realNameForMail(mail), nickname: mail !== session.mail ? state.nicknames[mail] || '' : '',
+          uid: p ? p.id : null, photo: p ? p.photo : '', color: colorForMail(mail), colorId: p?.color || '', me: mail === session.mail,
+        };
       })
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => (b.me - a.me) || a.name.localeCompare(b.name));
   }
+
+  /** Saves (or with an empty name removes) the nickname this person gives someone. */
+  async function setNickname(mail, nickname) {
+    const names = { ...state.nicknames };
+    const clean = String(nickname || '').replace(/\|/g, '/').trim().slice(0, 40);
+    if (clean) names[mail] = clean;
+    else delete names[mail];
+    await setDoc(doc(db, 'nicknames', uid), { names, updatedAt: serverTimestamp() });
+  }
+
+  const myHouseholds = () => state.households
+    .filter((h) => (h.members || []).includes(session.mail))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  const householdName = (id) => state.households.find((h) => h.id === id)?.name || '';
 
   return {
     state,
     session,
     subscribe(fn) { listeners.add(fn); fn(state); return () => listeners.delete(fn); },
     nameForMail,
+    realNameForMail,
+    shortNameForMail,
     nameForUid,
+    shortNameForUid,
+    nameForGoogleName,
+    colorForMail,
+    colorForUid,
     family,
-    stop() { for (const s of stops) s(); listeners.clear(); },
+    setNickname,
+    setMyColor,
+    myColor: () => me()?.color || '',
+    myHouseholds,
+    householdName,
+    stop() {
+      for (const s of stops) s();
+      for (const list of householdStops.values()) for (const s of list) s();
+      householdStops.clear();
+      listeners.clear();
+    },
   };
 }
 

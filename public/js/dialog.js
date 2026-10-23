@@ -149,7 +149,7 @@ export function openForm({ title, fields, submitLabel, onSubmit, danger, intro }
   const form = el('form', { class: 'form', novalidate: true });
   const controls = {};
   if (intro) form.append(el('p', { class: 'field-hint', text: intro }));
-  for (const f of fields) {
+  for (const f of fields.filter(Boolean)) {
     const c = buildField(f);
     controls[f.name || nextId('info')] = { ...c, field: f };
     form.append(c.row);

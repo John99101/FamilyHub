@@ -5,6 +5,7 @@
 // {name} marks a value filled in by the app.   is a space that never breaks.
 
 import { FAMILY_STRINGS } from './strings-family.js';
+import { HOUSE_STRINGS } from './strings-house.js';
 
 const BASE = {
   de: {
@@ -488,7 +489,7 @@ const BASE = {
   },
 };
 
-// The family hub texts live in strings-family.js and are merged in here.
+// The family hub texts live in strings-family.js and strings-house.js and are merged in here.
 export const STRINGS = Object.fromEntries(
-  Object.keys(BASE).map((lang) => [lang, { ...BASE[lang], ...FAMILY_STRINGS[lang] }]),
+  Object.keys(BASE).map((lang) => [lang, { ...BASE[lang], ...FAMILY_STRINGS[lang], ...HOUSE_STRINGS[lang] }]),
 );

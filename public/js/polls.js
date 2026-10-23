@@ -1,9 +1,11 @@
 // Polls: a question with 2 to 10 answers, one or several choices, live
 // results with names. The creator or an admin closes or deletes a poll.
+// Polls belong to the whole family or to a household.
 import { db, collection, doc, addDoc, updateDoc, deleteDoc, deleteField } from './firebase.js';
 import { $, el, svgIcon, toast, card, emptyNote, addButton, formatDateTime } from './ui.js';
 import { t } from './i18n.js';
-import { canEdit, createdFields, firstName, toDate } from './family-data.js';
+import { canEdit, createdFields, toDate, baseOf } from './family-data.js';
+import { ALL, inGroup, groupChips, groupField, defaultGroup, groupBadge } from './groups.js';
 import { openForm } from './dialog.js';
 
 const MAX_OPTIONS = 10;
@@ -15,6 +17,7 @@ export function createPolls(data) {
   const root = $('polls-content');
   const session = data.session;
   const uid = session.user.uid;
+  let group = ALL;
 
   async function vote(poll, index) {
     const mine = myVote(poll, uid);
@@ -22,7 +25,7 @@ export function createPolls(data) {
     if (poll.multi) next = mine.includes(index) ? mine.filter((i) => i !== index) : [...mine, index].sort((a, b) => a - b);
     else next = mine.length === 1 && mine[0] === index ? [] : [index];
     try {
-      await updateDoc(doc(db, 'polls', poll.id), { [`votes.${uid}`]: next.length ? next : deleteField() });
+      await updateDoc(doc(db, poll.path), { [`votes.${uid}`]: next.length ? next : deleteField() });
     } catch (err) {
       console.warn('Voting failed', err.code);
       toast(t('common.saveFailed'));
@@ -42,7 +45,7 @@ export function createPolls(data) {
       const share = total ? Math.round((counts[i].length / total) * 100) : 0;
       const bar = el('span', { class: 'poll-bar', 'aria-hidden': 'true' });
       bar.style.width = `${(counts[i].length / max) * 100}%`;
-      const names = counts[i].map((v) => firstName(data.nameForUid(v)) || '?').join(', ');
+      const names = counts[i].map((v) => data.shortNameForUid(v) || '?').join(', ');
       return el('li', {}, [
         el('button', {
           class: `poll-option ${chosen ? 'chosen' : ''}`, type: 'button',
@@ -61,7 +64,7 @@ export function createPolls(data) {
     });
 
     const created = toDate(poll.createdAt);
-    const meta = [t('common.addedBy', { name: poll.createdByName || '?' })];
+    const meta = [t('common.addedBy', { name: data.nameForUid(poll.createdBy, poll.createdByName) || '?' })];
     if (created) meta.push(formatDateTime(created));
     meta.push(t('polls.votes', { n: total }));
     if (poll.multi) meta.push(t('polls.multiShort'));
@@ -75,6 +78,7 @@ export function createPolls(data) {
     return el('article', { class: `poll ${poll.closed ? 'closed' : ''}`.trim() }, [
       el('div', { class: 'poll-head' }, [
         el('h3', { class: 'poll-question', text: poll.question }),
+        groupBadge(data, poll),
         poll.closed ? el('span', { class: 'badge', text: t('polls.closed') }) : null,
       ]),
       el('p', { class: 'muted small', text: meta.join(' · ') }),
@@ -85,10 +89,11 @@ export function createPolls(data) {
   }
 
   function render() {
-    const polls = data.state.polls;
+    const polls = data.state.polls.filter((p) => inGroup(p, group))
+      .sort((a, b) => (toDate(b.createdAt)?.getTime() || 0) - (toDate(a.createdAt)?.getTime() || 0));
     const open = polls.filter((p) => !p.closed);
     const closed = polls.filter((p) => p.closed);
-    const children = [];
+    const children = [groupChips(data, group, (value) => { group = value; render(); })];
     if (!polls.length) children.push(emptyNote(data.state.loaded.polls ? t('polls.none') : t('common.loading')));
     children.push(...open.map(pollCard));
     const main = card(t('nav.polls'), children, { action: addButton(t('polls.add'), openEditor) });
@@ -104,6 +109,7 @@ export function createPolls(data) {
         { name: 'question', type: 'text', label: t('polls.question'), maxlength: 200, required: true },
         { name: 'options', type: 'options', label: t('polls.options'), itemLabel: t('polls.option'), addLabel: t('polls.addOption'), max: MAX_OPTIONS, maxlength: 80, required: true, min: 2, requiredText: t('polls.twoOptions') },
         { name: 'multi', type: 'checkbox', label: t('polls.multi'), value: false },
+        groupField(data, defaultGroup(data, group)),
       ],
       submitLabel: t('polls.start'),
       onSubmit: async (v) => {
@@ -112,7 +118,7 @@ export function createPolls(data) {
         if (options.length < 2) return t('polls.twoOptions');
         if (new Set(options.map((o) => o.toLowerCase())).size !== options.length) return t('polls.duplicate');
         try {
-          await addDoc(collection(db, 'polls'), {
+          await addDoc(collection(db, `${baseOf(v.household || '')}polls`), {
             question: v.question.trim(), options, multi: !!v.multi, closed: false, votes: {}, ...createdFields(session),
           });
           toast(t('polls.started'));
@@ -127,7 +133,7 @@ export function createPolls(data) {
 
   async function setClosed(poll, closed) {
     try {
-      await updateDoc(doc(db, 'polls', poll.id), { closed });
+      await updateDoc(doc(db, poll.path), { closed });
     } catch (err) {
       console.warn('Closing the poll failed', err.code);
       toast(t('common.saveFailed'));
@@ -137,7 +143,7 @@ export function createPolls(data) {
   async function remove(poll) {
     if (!confirm(t('polls.confirmDelete', { question: poll.question }))) return;
     try {
-      await deleteDoc(doc(db, 'polls', poll.id));
+      await deleteDoc(doc(db, poll.path));
       toast(t('common.deleted'));
     } catch (err) {
       console.warn('Deleting the poll failed', err.code);

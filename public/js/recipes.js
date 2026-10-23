@@ -81,7 +81,7 @@ export function createRecipes(data) {
       content.push(el('p', { class: 'pre', text: r.steps }));
     }
     if (r.source) content.push(el('p', { class: 'small', text: t('recipes.sourceIs', { source: r.source }) }));
-    content.push(el('p', { class: 'muted small', text: t('common.addedBy', { name: r.createdByName || '?' }) }));
+    content.push(el('p', { class: 'muted small', text: t('common.addedBy', { name: data.nameForUid(r.createdBy, r.createdByName) || '?' }) }));
     const buttons = canEdit(session, r) ? [{ label: t('common.edit'), onClick: (close) => { close(); openEditor(r); } }] : [];
     openDialog({ title: r.title, content, buttons });
   }

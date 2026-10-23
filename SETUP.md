@@ -237,11 +237,11 @@ During the first deploy:
 - If it asks about a **cleanup policy** for container images, answer **Y**
   and keep the suggested 1 day. This keeps storage (and cost) near zero.
 - If it says the secret NGN_API_KEY or ANTHROPIC_API_KEY is missing, do
-  step 3 (and 3b) first. The deploy creates four functions: `marketUpdate`
+  step 3 (and 3b) first. The deploy creates five functions: `marketUpdate`
   (prices), `riskSummary` (the daily AI summary), `weeklyDigest` (the weekly
-  family overview) and `cleanupRoom` (deletes the messages of a deleted chat
-  room).
-- `cleanupRoom` reacts to the database. On the very first deploy Google may
+  overviews), `cleanupRoom` (deletes the messages of a deleted chat room) and
+  `cleanupHousehold` (deletes everything inside a deleted household).
+- `cleanupRoom` and `cleanupHousehold` react to the database. On the very first deploy Google may
   still be setting up permissions for that and the deploy can fail with a
   message about Eventarc or permissions. Wait 5 minutes and run the same
   deploy command again.
@@ -354,6 +354,19 @@ holidays. The switch is in the app (admins only): **Einstellungen** →
   **Tägliche KI Zusammenfassung (Claude)**.
 - Nothing here needs your computer: both jobs run on Google's servers.
 
+**Colors, names and households** (**Mehr** → **Familie**)
+
+- Everyone gets a free color when they first sign in and can change it
+  there. A color can only be held by one person; colors of people who are
+  no longer on the allow list can be freed by an admin.
+- "Namen geben": names you give others are only visible to you.
+- Households (admins): **+ Haushalt**, give it a name and tick who belongs
+  to it. A person can be in several. Members then see a household filter in
+  the calendar, tasks and polls, can file entries under the household, and get
+  the household's own chat room and weekly overview. Nobody outside the
+  household sees any of it, admins included; to look inside, an admin has to
+  add themselves. Deleting a household deletes everything in it.
+
 **The weekly overview** (Start page)
 
 - Every Sunday at 17:00 Berlin time the server collects the coming week
@@ -440,7 +453,9 @@ fallback model it picks; that is billed at that model's price.
 
 **Weekly overview (Anthropic):** about 1,500 input tokens and up to about
 4,000 output tokens (three languages plus thinking), roughly 0.05 to 0.10 USD
-per week, so about **0.20 to 0.40 USD per month** on top.
+per week, so about **0.20 to 0.40 USD per month** on top, **for each group**:
+the whole family plus every household with something planned (an empty week
+costs nothing).
 
 **Switch the market part off**
 
