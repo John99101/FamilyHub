@@ -77,6 +77,8 @@ function sparkline(history) {
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
   svg.setAttribute('width', String(w));
   svg.setAttribute('height', String(h));
+  // On phones the chart is stretched to the row width; keep the line even.
+  svg.setAttribute('preserveAspectRatio', 'none');
   svg.setAttribute('class', `spark ${values[values.length - 1] >= values[0] ? 'up' : 'down'}`);
   svg.setAttribute('role', 'img');
   const [y, m, d] = dates[0].split('-').map(Number);
@@ -91,6 +93,7 @@ function sparkline(history) {
   line.setAttribute('stroke-width', '1.6');
   line.setAttribute('stroke-linejoin', 'round');
   line.setAttribute('stroke-linecap', 'round');
+  line.setAttribute('vector-effect', 'non-scaling-stroke');
   svg.append(title, line);
   return svg;
 }
@@ -99,7 +102,7 @@ function quoteRow(quote, { symbol, history, showChart = false, note = '' } = {})
   const sym = quote?.symbol || symbol;
   const main = el('div', { class: 'q-main' }, [
     el('span', { class: 'q-name', text: quote?.name || sym }),
-    el('span', { class: 'q-sub', text: [sym, quote ? formatQuoteTime(quote.quoteTime) : note].filter(Boolean).join(' · ') }),
+    el('span', { class: 'q-sub', text: [sym, quote ? formatQuoteTime(quote.quoteTime) : ''].filter(Boolean).join(' · ') }),
   ]);
   const nums = el('div', { class: 'q-num' }, quote && typeof quote.price === 'number'
     ? [el('span', { class: 'q-price', text: usd.format(quote.price) }), changeNode(quote.changePct)]

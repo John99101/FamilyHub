@@ -446,9 +446,9 @@ export function createChat(session, data) {
       }, [svgIcon(MORE_ICON)]));
     }
 
-    const quote = m.replyTo ? el('button', { class: 'quote', type: 'button', onclick: () => scrollToMessage(m.replyTo.id) }, [
-      el('span', { class: 'quote-name', text: quoteName || t('chat.unknownSender') }),
-      el('span', { class: 'quote-text', text: m.replyTo.text }),
+    const quote = m.replyTo ? el('button', { class: 'reply-quote', type: 'button', onclick: () => scrollToMessage(m.replyTo.id) }, [
+      el('span', { class: 'reply-quote-name', text: quoteName || t('chat.unknownSender') }),
+      el('span', { class: 'reply-quote-text', text: m.replyTo.text }),
     ]) : null;
 
     const bubble = el('div', { class: 'bubble' }, [

@@ -329,13 +329,13 @@
 }
 .reaction.mine { border-color: var(--primary); color: var(--primary); }
 
-.quote {
+.reply-quote {
   display: flex; flex-direction: column; width: 100%; text-align: left; margin: 2px 0 4px;
   padding: 4px 8px; border: 0; border-left: 3px solid var(--primary); border-radius: 6px;
   background: rgb(127 127 127 / 12%); color: var(--text);
 }
-.quote-name { font-size: 12px; font-weight: 700; color: var(--primary); }
-.quote-text { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reply-quote-name { font-size: 12px; font-weight: 700; color: var(--primary); }
+.reply-quote-text { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .reply-bar {
   max-width: 760px; margin: 0 auto 6px; display: flex; align-items: center; gap: 6px;

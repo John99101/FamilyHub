@@ -385,9 +385,13 @@ button { cursor: pointer; }
 .quote:last-child { border-bottom: 0; }
 .quote.empty, .quote-list .empty { padding: 10px 0; border: 0; }
 .q-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.q-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.q-sub { font-size: 12.5px; color: var(--muted); }
-.q-num { display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-variant-numeric: tabular-nums; }
+/* Long company names wrap to at most two lines instead of running out of the card. */
+.q-name {
+  font-weight: 600; overflow-wrap: anywhere; overflow: hidden;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+}
+.q-sub { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.q-num { flex: 0 1 auto; max-width: 45%; display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-variant-numeric: tabular-nums; }
 .q-price { font-weight: 700; white-space: nowrap; }
 .q-chart { flex: 0 0 auto; color: var(--muted); display: flex; }
 
@@ -400,9 +404,14 @@ button { cursor: pointer; }
 .spark.down { color: var(--down); }
 .spark-empty { font-size: 11.5px; color: var(--muted); width: 96px; text-align: center; }
 
-@media (max-width: 380px) {
-  .q-chart svg { width: 72px; }
-  .spark-empty { width: 72px; }
+/* Phones: name and price on the first line, the chart across the whole row below. */
+@media (max-width: 480px) {
+  .quote { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; row-gap: 6px; }
+  .q-main { grid-column: 1; grid-row: 1; }
+  .q-num { grid-column: 2; grid-row: 1; max-width: 10em; }
+  .q-chart { grid-column: 1 / -1; grid-row: 2; }
+  .q-chart svg { width: 100%; height: 28px; }
+  .spark-empty { width: auto; text-align: left; }
 }
 
 .search-input {
