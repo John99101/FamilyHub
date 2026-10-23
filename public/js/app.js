@@ -20,11 +20,20 @@ import { createRecipes } from './recipes.js';
 import { createContacts } from './contacts.js';
 import { createWeather } from './weather.js';
 import { createFamilyPage } from './family-page.js';
+import { createBoard } from './board.js';
+import { createTrips } from './trips.js';
+import { createQuestionPage } from './question-page.js';
+import { createTree } from './tree.js';
+import { isSimpleMode, SIMPLE_ROUTES } from './simple.js';
 
-export const APP_VERSION = '1.3.1';
+export const APP_VERSION = '1.4.0';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();
+
+// Simple mode (big text, only the essentials) is chosen per device.
+const SIMPLE = isSimpleMode();
+document.documentElement.classList.toggle('simple', SIMPLE);
 
 const SCREENS = ['loading', 'signin', 'noaccess', 'app'];
 // tab: which tab is highlighted; back: a page under "Mehr" (shows a back link).
@@ -35,6 +44,10 @@ const ROUTES = {
   aufgaben: { title: 'nav.tasks', view: 'view-tasks', page: 'tasks', tab: 'aufgaben' },
   mehr: { title: 'nav.more', view: 'view-more', tab: 'mehr' },
   familie: { title: 'nav.family', view: 'view-family', page: 'family', tab: 'mehr', back: true },
+  pinnwand: { title: 'nav.board', view: 'view-board', page: 'board', tab: 'mehr', back: true },
+  reisen: { title: 'nav.trips', view: 'view-trips', page: 'trips', tab: 'mehr', back: true },
+  frage: { title: 'nav.question', view: 'view-question', page: 'question', tab: 'mehr', back: true },
+  stammbaum: { title: 'nav.tree', view: 'view-tree', page: 'tree', tab: 'mehr', back: true },
   umfragen: { title: 'nav.polls', view: 'view-polls', page: 'polls', tab: 'mehr', back: true },
   rezepte: { title: 'nav.recipes', view: 'view-recipes', page: 'recipes', tab: 'mehr', back: true },
   kontakte: { title: 'nav.contacts', view: 'view-contacts', page: 'contacts', tab: 'mehr', back: true },
@@ -168,6 +181,10 @@ function startApp() {
     tasks,
     weather,
     family: createFamilyPage(familyData),
+    board: createBoard(familyData),
+    trips: createTrips(familyData),
+    question: createQuestionPage(familyData),
+    tree: createTree(familyData),
     polls: createPolls(familyData),
     recipes: createRecipes(familyData),
     contacts: createContacts(familyData),
@@ -175,7 +192,8 @@ function startApp() {
     risk: createRiskPage(marketData),
     settings: createSettings(session, { onSignOut: doSignOut, marketData, familyData }),
   };
-  pages.home = createHome(familyData, { calendar, tasks, chat, weather });
+  pages.home = createHome(familyData, { calendar, tasks, chat, weather, board: pages.board, trips: pages.trips });
+  calendar.setTripOpener((path) => { location.hash = '#/reisen'; pages.trips.open(path); });
   route();
 }
 
@@ -183,6 +201,7 @@ function route() {
   if (!session || !pages) return;
   let name = location.hash.replace(/^#\/?/, '');
   if (!ROUTES[name]) name = 'start';
+  if (SIMPLE && !SIMPLE_ROUTES.has(name)) name = 'start';
   const r = ROUTES[name];
   for (const [key, other] of Object.entries(ROUTES)) $(other.view).hidden = key !== name;
   for (const tab of document.querySelectorAll('.tab')) {

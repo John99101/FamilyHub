@@ -10,9 +10,10 @@ import {
   writeBatch, serverTimestamp, arrayUnion, arrayRemove,
 } from './firebase.js';
 import { $, el, avatar, svgIcon, TRASH_ICON, toast, formatTime, formatDateTime, dayKey, dayLabel } from './ui.js';
-import { t } from './i18n.js';
+import { t, lang } from './i18n.js';
 import { MAIN_ROOM, canEdit, createdFields, toDate } from './family-data.js';
 import { paint } from './colors.js';
+import { isSimpleMode } from './simple.js';
 import { openForm, openDialog } from './dialog.js';
 
 export const ROOM_ID = MAIN_ROOM;
@@ -27,6 +28,8 @@ const ROOM_KEY = 'familyhub-room';
 const SEEN_KEY = 'familyhub-seen';
 const MORE_ICON = ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'];
 const REPLY_ICON = ['m9 14-5-5 5-5', 'M4 9h10a6 6 0 0 1 6 6v4'];
+const TRANSLATE_ICON = ['M4 5h8', 'M8 3v2', 'M5.5 9a7 7 0 0 0 5.5 4', 'M11 5c0 4-3 7-7 8', 'm12 21 4-9 4 9', 'M13.5 18h5'];
+const TRANSLATION_LANGS = ['de', 'en', 'fr'];
 
 export const REACTIONS = [
   ['like', '👍'], ['love', '❤️'], ['laugh', '😂'], ['wow', '😮'], ['sad', '😢'], ['thanks', '🙏'],
@@ -63,7 +66,8 @@ export function createChat(session, data) {
   const uid = session.user.uid;
 
   let roomId = MAIN_ROOM;
-  try { roomId = localStorage.getItem(ROOM_KEY) || MAIN_ROOM; } catch { /* storage blocked */ }
+  // Simple mode has no room bar: it always shows the main room.
+  try { roomId = isSimpleMode() ? MAIN_ROOM : localStorage.getItem(ROOM_KEY) || MAIN_ROOM; } catch { /* storage blocked */ }
   let messagesRef = collection(db, roomPath(roomId), 'messages');
   const messages = new Map(); // id -> message
   const nodeCache = new Map(); // id -> { key, node }
@@ -81,6 +85,9 @@ export function createChat(session, data) {
   let stopped = false;
   let visible = false;
   let activeId = null; // message whose actions are open
+  // Translations shown here: message id → { status: 'pending' | 'done' | 'error', text, from, reason }
+  const translations = new Map();
+  const translationStops = new Map();
   let reply = null; // { id, name, text }
 
   // ---------- rooms ----------
@@ -128,6 +135,7 @@ export function createChat(session, data) {
     messagesRef = collection(db, roomPath(roomId), 'messages');
     messages.clear();
     nodeCache.clear();
+    stopTranslations();
     list.replaceChildren();
     windowSize = PAGE_SIZE;
     hasMore = false;
@@ -305,6 +313,92 @@ export function createChat(session, data) {
     return pills.length ? el('div', { class: 'reactions' }, pills) : null;
   }
 
+  // ---------- translations (Claude) ----------
+
+  // Where the message lives, as the translations rules expect it.
+  function messagePlace(messageId, language = lang) {
+    const room = currentRoom();
+    const household = room?.household || (roomId.startsWith('h:') ? roomId.slice(2) : '');
+    const room2 = household ? 'main' : roomId;
+    return { id: `t_${household}_${room2}_${messageId}_${language}`, household, roomId: room2 };
+  }
+
+  function stopTranslations() {
+    for (const stop of translationStops.values()) stop();
+    translationStops.clear();
+    translations.clear();
+  }
+
+  function hideTranslation(m) {
+    translationStops.get(m.id)?.();
+    translationStops.delete(m.id);
+    translations.delete(m.id);
+    render();
+  }
+
+  function translate(m) {
+    if (data.state.translateSwitch?.enabled === false) { toast(t('chat.translateOff')); return; }
+    if (translationStops.has(m.id)) return;
+    const place = messagePlace(m.id);
+    translations.set(m.id, { status: 'pending' });
+    render();
+    let asked = false;
+    const stop = onSnapshot(doc(db, 'translations', place.id), (snap) => {
+      if (!snap.exists()) {
+        if (asked) return;
+        asked = true;
+        // Ask for it; the translateMessage function answers in the same document.
+        setDoc(doc(db, 'translations', place.id), {
+          household: place.household, roomId: place.roomId, messageId: m.id, lang, uid, createdAt: serverTimestamp(), status: 'pending',
+        }).catch((err) => {
+          console.warn('Asking for a translation failed', err.code);
+          translations.set(m.id, { status: 'error', reason: 'failed' });
+          render();
+        });
+        return;
+      }
+      const d = snap.data();
+      if (d.status === 'done') translations.set(m.id, { status: 'done', text: String(d.text || ''), from: d.from || 'other' });
+      else if (d.status === 'error') translations.set(m.id, { status: 'error', reason: d.reason || 'failed' });
+      else translations.set(m.id, { status: 'pending' });
+      render();
+    }, (err) => {
+      console.warn('Reading the translation failed', err.code);
+      translations.set(m.id, { status: 'error', reason: 'failed' });
+      render();
+    });
+    translationStops.set(m.id, stop);
+  }
+
+  // A failed attempt is removed (the rules allow that) and asked again.
+  async function retryTranslation(m) {
+    const place = messagePlace(m.id);
+    hideTranslation(m);
+    try { await deleteDoc(doc(db, 'translations', place.id)); } catch (err) { console.warn('Removing a failed translation failed', err.code); }
+    translate(m);
+  }
+
+  function translationBlock(m) {
+    const tr = translations.get(m.id);
+    if (!tr) return null;
+    if (tr.status === 'pending') return el('p', { class: 'translation pending', text: t('chat.translating') });
+    if (tr.status === 'error') {
+      const key = { limit: 'chat.translateLimit', off: 'chat.translateOff', missing: 'chat.translateMissing' }[tr.reason] || 'chat.translateFailed';
+      return el('div', { class: 'translation error' }, [
+        el('span', { text: t(key) }),
+        tr.reason === 'limit' || tr.reason === 'off' ? null : el('button', { class: 'btn-link', type: 'button', text: t('chat.retry'), onclick: () => retryTranslation(m) }),
+      ]);
+    }
+    const same = tr.from === lang;
+    return el('div', { class: 'translation' }, [
+      same ? null : el('p', { class: 'translation-text', text: tr.text }),
+      el('p', { class: 'translation-note' }, [
+        el('span', { text: same ? t('chat.alreadyYourLanguage') : t(`chat.from.${['de', 'en', 'fr'].includes(tr.from) ? tr.from : 'other'}`) }),
+        el('button', { class: 'btn-link', type: 'button', text: t('chat.hideTranslation'), onclick: () => hideTranslation(m) }),
+      ]),
+    ]);
+  }
+
   function actionRow(m) {
     const buttons = REACTIONS.map(([key, emoji]) => el('button', {
       class: 'react-btn', type: 'button', 'aria-label': t(`chat.react.${key}`), title: t(`chat.react.${key}`),
@@ -313,6 +407,13 @@ export function createChat(session, data) {
     buttons.push(el('button', {
       class: 'act-btn', type: 'button', onclick: () => { activeId = null; setReply(m); render(); },
     }, [svgIcon(REPLY_ICON), el('span', { text: t('chat.reply') })]));
+    if (m.uid !== uid && data.state.translateSwitch?.enabled !== false) {
+      const shown = translations.has(m.id);
+      buttons.push(el('button', {
+        class: 'act-btn', type: 'button',
+        onclick: () => { activeId = null; if (shown) hideTranslation(m); else { translate(m); render(); } },
+      }, [svgIcon(TRANSLATE_ICON), el('span', { text: shown ? t('chat.hideTranslation') : t('chat.translate') })]));
+    }
     if (canDelete(m)) {
       buttons.push(el('button', {
         class: 'act-btn danger', type: 'button', onclick: () => { activeId = null; render(); removeMessage(m); },
@@ -328,7 +429,7 @@ export function createChat(session, data) {
     const shown = data.nameForUid(m.uid, m.name) || t('chat.unknownSender');
     const color = data.colorForUid(m.uid);
     const quoteName = m.replyTo ? data.nameForGoogleName(m.replyTo.name) : '';
-    const key = [m.text, shown, color, quoteName, m.photo, m.pending, continued, canDelete(m), active, JSON.stringify(m.reactions), m.replyTo?.id, Math.floor(m.ms / 60000)].join('|');
+    const key = [m.text, shown, color, quoteName, m.photo, m.pending, continued, canDelete(m), active, JSON.stringify(m.reactions), m.replyTo?.id, Math.floor(m.ms / 60000), JSON.stringify(translations.get(m.id) || null)].join('|');
     const cached = nodeCache.get(m.id);
     if (cached && cached.key === key) return cached.node;
 
@@ -354,6 +455,7 @@ export function createChat(session, data) {
       paint(el('div', { class: 'msg-name', text: shown }), color),
       quote,
       el('div', { class: 'msg-text', text: m.text }),
+      translationBlock(m),
       meta,
     ]);
 
@@ -432,7 +534,14 @@ export function createChat(session, data) {
   async function removeMessage(m) {
     if (!confirm(t('chat.confirmDelete'))) return;
     try {
-      await deleteDoc(doc(messagesRef, m.id));
+      // Translations of the message go with it (the rules allow that once the message is gone).
+      const ids = TRANSLATION_LANGS.map((language) => messagePlace(m.id, language).id);
+      const found = await Promise.all(ids.map((id) => getDoc(doc(db, 'translations', id)).then((snap) => (snap.exists() ? id : null)).catch(() => null)));
+      const batch = writeBatch(db);
+      batch.delete(doc(messagesRef, m.id));
+      for (const id of found.filter(Boolean)) batch.delete(doc(db, 'translations', id));
+      await batch.commit();
+      hideTranslation(m);
     } catch (err) {
       console.warn('Delete failed', err.code);
       toast(t('chat.deleteFailed'));
@@ -686,6 +795,7 @@ export function createChat(session, data) {
       $('chat-dot').hidden = true;
       messages.clear();
       nodeCache.clear();
+      stopTranslations();
     },
   };
 }

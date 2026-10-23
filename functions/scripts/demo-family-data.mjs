@@ -130,6 +130,42 @@ await contact('c3', { name: 'Ben', group: 'family', phone: '+49 151 1234567', no
 await db.doc('places/pl1').set({ name: 'Berlin', country: 'Deutschland', lat: 52.52, lon: 13.41, ...by(...ANNA) });
 await db.doc('places/pl2').set({ name: 'Lyon', country: 'France', lat: 45.75, lon: 4.85, ...by(...BEN) });
 
+// ---------- visible name, notices, notebook, trip, tree, question, call buttons ----------
+await db.doc('people/demo_ben').set({ displayName: 'Benni' }, { merge: true });
+await db.doc('names/Benni').set({ uid: 'demo_ben' });
+await db.doc('notices/n1').set({ text: 'Müllabfuhr ist diese Woche am Dienstag', until: day(4), ...by(...ANNA), updatedAt: ago(5) });
+await db.doc('notices/n2').set({ text: 'Der Schlüssel für den Keller hängt jetzt neben der Tür.', until: '', ...by(...BEN), updatedAt: ago(5) });
+await db.doc('households/h_zh/notices/zn1').set({ text: 'Zürich: Putzfrau kommt am Freitag', until: day(1), ...by(...ANNA), updatedAt: ago(5) });
+const note = (id, title, body, who) => db.doc(`notes/${id}`).set({
+  title, body, ...by(...who), updatedAt: ago(30), updatedBy: who[0], updatedByName: who[1],
+});
+await note('w1', 'Heizung entlüften', 'Entlüftungsschlüssel liegt im Werkzeugkasten.\nVentil oben am Heizkörper langsam öffnen, bis Wasser kommt.', ANNA);
+await note('w2', 'WLAN für Gäste', 'Netzwerk: Familie Gast\nDas Passwort steht auf dem Router.', BEN);
+await db.doc('trips/t1').set({
+  title: 'Sommer in der Bretagne', destination: 'Quiberon', start: day(10), end: day(16),
+  people: ['chef@example.com', 'anna@example.com', 'ben@example.com'], note: 'Fahrräder mitnehmen', ...by(...ANNA), updatedAt: ago(5),
+});
+const item = (id, fields) => db.doc(`trips/t1/items/${id}`).set({ endDate: '', time: '', place: '', note: '', ...by(...ANNA), updatedAt: ago(5), ...fields });
+await item('i1', { kind: 'travel', date: day(10), time: '07:40', title: 'Zug Zürich nach Paris', place: 'Zürich HB' });
+await item('i2', { kind: 'stay', date: day(10), endDate: day(16), title: 'Ferienhaus Kerlann', place: '12 Rue de la Plage, Quiberon' });
+await item('i3', { kind: 'day', date: day(11), title: 'Strandtag', note: 'Sonnencreme!' });
+await item('i4', { kind: 'day', date: day(12), time: '10:00', title: 'Fahrradtour zur Pointe du Conguel' });
+const person = (id, fields) => db.doc(`tree/${id}`).set({
+  birthYear: null, deathYear: null, mail: '', parents: [], partners: [], birthdayId: '', note: '',
+  ...by(...ANNA), updatedAt: ago(5), updatedBy: 'demo_anna', ...fields,
+});
+await person('erika', { name: 'Oma Erika', birthYear: 1946, partners: ['hans'], birthdayId: 'ev4' });
+await person('hans', { name: 'Opa Hans', birthYear: 1944, deathYear: 2019 });
+await person('anna', { name: 'Anna', birthYear: 1975, parents: ['erika', 'hans'], partners: ['jonas'], mail: 'anna@example.com' });
+await person('jonas', { name: 'Jonas', birthYear: 1973, mail: 'chef@example.com' });
+await person('paul', { name: 'Onkel Paul', birthYear: 1978, parents: ['erika', 'hans'] });
+await person('ben', { name: 'Ben', birthYear: 2014, parents: ['anna', 'jonas'], mail: 'ben@example.com', birthdayId: 'ev5' });
+await person('lena', { name: 'Lena', birthYear: 2010, parents: ['anna', 'jonas'] });
+await db.doc(`days/${today}/answers/demo_anna`).set({ text: 'Der Spaziergang am Sonntag mit allen.', name: 'Anna Beispiel', createdAt: ago(120), updatedAt: ago(120) });
+await db.doc(`days/${today}/answers/demo_ben`).set({ text: 'Mein Tor beim Fußball!', name: 'Ben Beispiel', createdAt: ago(60), updatedAt: ago(60) });
+await db.doc('contacts/c1').set({ quick: true }, { merge: true });
+await db.doc('contacts/c3').set({ quick: true }, { merge: true });
+
 // ---------- weekly overview from a fake Claude ----------
 await db.doc('digest/current').delete();
 const fakeClaude = {

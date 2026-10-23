@@ -237,14 +237,16 @@ During the first deploy:
 - If it asks about a **cleanup policy** for container images, answer **Y**
   and keep the suggested 1 day. This keeps storage (and cost) near zero.
 - If it says the secret NGN_API_KEY or ANTHROPIC_API_KEY is missing, do
-  step 3 (and 3b) first. The deploy creates five functions: `marketUpdate`
+  step 3 (and 3b) first. The deploy creates six functions: `marketUpdate`
   (prices), `riskSummary` (the daily AI summary), `weeklyDigest` (the weekly
-  overviews), `cleanupRoom` (deletes the messages of a deleted chat room) and
-  `cleanupHousehold` (deletes everything inside a deleted household).
-- `cleanupRoom` and `cleanupHousehold` react to the database. On the very first deploy Google may
-  still be setting up permissions for that and the deploy can fail with a
-  message about Eventarc or permissions. Wait 5 minutes and run the same
-  deploy command again.
+  overviews), `translateMessage` (chat translations), `cleanupRoom` (deletes
+  the messages of a deleted chat room) and `cleanupHousehold` (deletes
+  everything inside a deleted household).
+- `translateMessage`, `cleanupRoom` and `cleanupHousehold` react to the
+  database. On the very first deploy of such a function Google may still be
+  setting up permissions for that and the deploy can fail with a message
+  about Eventarc or permissions. Wait 5 minutes and run the same deploy
+  command again.
 - The deploy also creates one database index (for the list of recently done
   tasks). It takes a few minutes to build; until then that list stays empty.
 
@@ -356,6 +358,10 @@ holidays. The switch is in the app (admins only): **Einstellungen** →
 
 **Colors, names and households** (**Mehr** → **Familie**)
 
+- "Mein Name": the name everyone sees in the app (chat, calendar, tasks,
+  weekly overview). It starts as the Google name; type another one and
+  **Speichern**. A name can only be used by one person. **Google Namen
+  verwenden** goes back to the Google name.
 - Everyone gets a free color when they first sign in and can change it
   there. A color can only be held by one person; colors of people who are
   no longer on the allow list can be freed by an admin.
@@ -367,7 +373,30 @@ holidays. The switch is in the app (admins only): **Einstellungen** →
   household sees any of it, admins included; to look inside, an admin has to
   add themselves. Deleting a household deletes everything in it.
 
-**If colors cannot be chosen** (every color seems taken, or saving fails)
+**Simple mode for grandparents**
+
+1. Admins: **Mehr** → **Kontakte** → **Bearbeiten** on a contact → tick
+   **Großer Anrufknopf in der einfachen Ansicht**. Do this for the 2 to 6 people they
+   call most.
+2. On the grandparent's phone or tablet: **Mehr** → **Einstellungen** →
+   **Einfache Ansicht auf diesem Gerät**. The app then shows large text,
+   today's and tomorrow's dates, the call buttons and the family chat, and
+   nothing else. It only changes that one device.
+3. To leave it: the button **Normale Ansicht** at the bottom of the Start
+   page.
+
+**Pinnwand, Reisen, Frage des Tages, Stammbaum** (all under **Mehr**)
+
+- Notices show on everyone's Start page; with an end date they disappear by
+  themselves after that day. Notebook pages can be improved by anyone.
+- Trips also appear as a line in the calendar.
+- The question of the day changes at midnight; the others' answers appear
+  once you have answered.
+- The family tree is shared by everyone. Link a person to a mail address to
+  show them in that person's color, and to a birthday in the calendar to show
+  the date when someone taps them.
+
+**If colors or names cannot be chosen, or a new page shows an error**
 
 The server's security rules are probably older than the app (for example
 only the website was deployed, or the first deploy stopped at the functions
@@ -378,8 +407,22 @@ firebase deploy --only firestore
 ```
 
 To check: Firebase console → **Firestore Database** → tab **Rules**: the text
-must contain `match /colors/{color}`. Colors that got stuck earlier are freed
-automatically the next time anyone opens the app.
+must contain `match /colors/{color}` and `match /translations/{id}`. Colors
+and names that got stuck earlier are freed automatically the next time
+anyone opens the app.
+
+**Chat translations**
+
+- Under every message from someone else there is a small **Übersetzen**
+  button. It translates the message into the language the reader set in the
+  app. Only that message's text goes to Anthropic, never names or mail
+  addresses.
+- Each translation is made once per message and language and then shared by
+  everyone in the room, so asking again costs nothing.
+- Limit: 100 translations per person and day.
+- Switch it off in the app: **Mehr** → **Einstellungen** → card
+  **Wochenüberblick** → **Chatnachrichten mit Claude übersetzen**. The button
+  then disappears from the chat.
 
 **The weekly overview** (Start page)
 
@@ -443,7 +486,8 @@ All of this stays inside Google's free amounts for a family:
   months ago on, the polls and the chat rooms (a few hundred documents for a
   busy family); recipes and contacts only when their page is opened. 10
   people opening the app 5 times a day stay well inside the free amount.
-- Cloud Functions: about 375 runs per month; free up to 2 million.
+- Cloud Functions: about 375 timed runs per month plus one per
+  translation; free up to 2 million.
 - Cloud Scheduler: 3 jobs free per **billing account**; this app uses 3
   (prices, risk summary, weekly overview). If other projects on the same
   billing account also use Cloud Scheduler, each extra job costs about 0.10
@@ -470,6 +514,12 @@ fallback model it picks; that is billed at that model's price.
 per week, so about **0.20 to 0.40 USD per month** on top, **for each group**:
 the whole family plus every household with something planned (an empty week
 costs nothing).
+
+**Chat translations (Anthropic):** a short message is about 300 to 500 input
+tokens and 100 to 300 output tokens: roughly **0.2 to 0.8 US cents** each. A
+very long message (2000 characters) can reach about 2 cents. A family that
+translates 10 messages a day pays about **1 to 2 USD per month**. The daily
+limit of 100 per person and the spend limit from step 3b cap the worst case.
 
 **Switch the market part off**
 
@@ -508,6 +558,17 @@ costs nothing).
 
   ```
   firebase functions:delete weeklyDigest --region europe-west3
+  ```
+
+**Switch the chat translations off**
+
+- Soft: in the app, **Mehr** → **Einstellungen** → **Chatnachrichten mit
+  Claude übersetzen** → switch off. The **Übersetzen** button disappears and
+  no more requests go to Anthropic.
+- Hard:
+
+  ```
+  firebase functions:delete translateMessage --region europe-west3
   ```
 
 ---

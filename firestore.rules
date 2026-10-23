@@ -10,7 +10,14 @@ rules_version = '2';
 //   people/{uid}                          name, mail, photo and color of everyone who signed in
 //   colors/{color}                        { uid }: who holds a color (so no color is held twice)
 //   nicknames/{uid}                       names this person gives others, only readable by them
-//   households/{h}                        { name, members }, with events, tasks, polls, rooms/main, digest inside
+//   households/{h}                        { name, members }, with events, tasks, polls, trips, notices, notes, rooms/main, digest inside
+//   names/{name}                          { uid }: who uses a visible name (so no name is used twice)
+//   trips/{id}, trips/{id}/items/{id}     trips with days, accommodation and journeys
+//   notices/{id}, notes/{id}              notice board and family notebook
+//   tree/{id}                             family tree people
+//   days/{day}/answers/{uid}              answers to the question of the day
+//   translations/{id}                     chat translations by Claude (written by the Cloud Function)
+//   config/translate                      translation switch (admins; missing = on)
 //   rooms/{roomId}                        chat room: { name, open, members, createdBy, createdByName, createdAt, last }
 //   rooms/{roomId}/messages/{messageId}   message: { uid, name, photo, text, createdAt, replyTo?, reactions? }
 //   events/{id}                           calendar entries and birthdays
@@ -134,13 +141,49 @@ service cloud.firestore {
       allow read: if isMember();
       allow create, update: if isMember()
         && uid == request.auth.uid
-        && request.resource.data.keys().hasOnly(['name', 'mail', 'photo', 'color', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['name', 'mail', 'photo', 'color', 'displayName', 'updatedAt'])
         && request.resource.data.keys().hasAll(['name', 'mail', 'photo', 'updatedAt'])
         && request.resource.data.name == myName()
         && request.resource.data.mail == myMail()
         && request.resource.data.photo == request.auth.token.get('picture', '')
         && request.resource.data.updatedAt == request.time
-        && (!('color' in request.resource.data) || ownsColor(request.resource.data.color));
+        && (!('color' in request.resource.data) || ownsColor(request.resource.data.color))
+        && (!('displayName' in request.resource.data) || ownsName(request.resource.data.displayName));
+    }
+
+    // ---------- visible names: chosen by each person, never two people with the same ----------
+    //
+    // names/{name} = { uid } locks a visible name, like colors/{color} below.
+    // A name has 1 to 40 characters, no "/" or "|", no spaces at the ends, and
+    // does not start with "." (so it is always a valid document ID).
+
+    function validDisplayName(n) {
+      return n is string && n.size() >= 1 && n.size() <= 40 && n.trim() == n
+        && n.matches('^[^/|.][^/|]*$');
+    }
+
+    function ownsName(n) {
+      return validDisplayName(n)
+        && getAfter(/databases/$(database)/documents/names/$(n)).data.uid == request.auth.uid;
+    }
+
+    function stuckName(holder, name) {
+      return !exists(/databases/$(database)/documents/people/$(holder))
+        || get(/databases/$(database)/documents/people/$(holder)).data.get('displayName', '') != name;
+    }
+
+    match /names/{name} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && validDisplayName(name)
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/people/$(request.auth.uid)).data.get('displayName', '') == name;
+      allow delete: if isMember()
+        && ((resource.data.uid == request.auth.uid
+            && getAfter(/databases/$(database)/documents/people/$(request.auth.uid)).data.get('displayName', '') != name)
+          || stuckName(resource.data.uid, name)
+          || (isAdmin() && !stillListed(resource.data.uid)));
     }
 
     // ---------- colors: one per person, never two people with the same ----------
@@ -510,8 +553,10 @@ service cloud.firestore {
     // ---------- contacts and emergency info (everyone reads, admins write) ----------
 
     function validContact(d) {
-      return d.keys().hasOnly(['name', 'group', 'phone', 'phone2', 'mail', 'address', 'note', 'updatedAt', 'updatedBy'])
+      return d.keys().hasOnly(['name', 'group', 'phone', 'phone2', 'mail', 'address', 'note', 'quick', 'updatedAt', 'updatedBy'])
         && d.keys().hasAll(['name', 'group', 'phone', 'phone2', 'mail', 'address', 'note', 'updatedAt', 'updatedBy'])
+        // quick: shown as a big call button in the simple mode
+        && (!('quick' in d) || d.quick is bool)
         && title(d.name, 100)
         && d.group in ['family', 'health', 'emergency', 'service', 'other']
         && d.phone is string && d.phone.matches('^[0-9+ ()/.-]{0,40}$')
@@ -542,6 +587,228 @@ service cloud.firestore {
         && request.resource.data.lon is number && request.resource.data.lon >= -180 && request.resource.data.lon <= 180
         && createdNow(request.resource.data);
       allow delete: if isMember() && creatorOrAdmin();
+    }
+
+    // ---------- trips (family or household) ----------
+
+    function validTrip(d) {
+      return d.keys().hasOnly(['title', 'destination', 'start', 'end', 'people', 'note',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['title', 'destination', 'start', 'end', 'people', 'note',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && title(d.title, 100)
+        && optText(d.destination, 100)
+        && isoDay(d.start)
+        && isoDay(d.end)
+        && d.end >= d.start
+        && d.people is list
+        && d.people.size() <= 50
+        && validMailList(d.people)
+        && optText(d.note, 2000)
+        && d.updatedAt == request.time;
+    }
+
+    // A part of a trip: a day's plan, an accommodation, or a journey.
+    function validTripItem(d) {
+      return d.keys().hasOnly(['kind', 'date', 'endDate', 'time', 'title', 'place', 'note',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['kind', 'date', 'endDate', 'time', 'title', 'place', 'note',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && d.kind in ['day', 'stay', 'travel']
+        && isoDay(d.date)
+        && (d.endDate == '' || (isoDay(d.endDate) && d.endDate >= d.date))
+        && d.time is string && (d.time == '' || d.time.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$'))
+        && title(d.title, 100)
+        && optText(d.place, 200)
+        && optText(d.note, 1000)
+        && d.updatedAt == request.time;
+    }
+
+    match /trips/{tripId} {
+      allow read: if isMember();
+      allow create: if isMember() && validTrip(request.resource.data) && createdNow(request.resource.data);
+      allow update: if isMember() && creatorOrAdmin() && validTrip(request.resource.data) && keepsCreator();
+      allow delete: if isMember() && creatorOrAdmin();
+
+      match /items/{itemId} {
+        allow read: if isMember();
+        allow create: if isMember()
+          && exists(/databases/$(database)/documents/trips/$(tripId))
+          && validTripItem(request.resource.data) && createdNow(request.resource.data);
+        allow update: if isMember() && creatorOrAdmin() && validTripItem(request.resource.data) && keepsCreator();
+        // Also the trip's creator, so a whole trip can be deleted with everything in it.
+        allow delete: if isMember()
+          && (creatorOrAdmin() || get(/databases/$(database)/documents/trips/$(tripId)).data.createdBy == request.auth.uid);
+      }
+    }
+
+    // ---------- notice board and family notebook (family or household) ----------
+
+    function validNotice(d) {
+      return d.keys().hasOnly(['text', 'until', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['text', 'until', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+        && title(d.text, 300)
+        && (d.until == '' || isoDay(d.until))
+        && d.updatedAt == request.time;
+    }
+
+    // Notebook pages: anyone in the group may improve them.
+    function validNote(d) {
+      return d.keys().hasOnly(['title', 'body', 'createdBy', 'createdByName', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && d.keys().hasAll(['title', 'body', 'createdBy', 'createdByName', 'createdAt', 'updatedAt', 'updatedBy', 'updatedByName'])
+        && title(d.title, 100)
+        && optText(d.body, 10000)
+        && d.updatedAt == request.time
+        && d.updatedBy == request.auth.uid
+        && d.updatedByName == myName();
+    }
+
+    match /notices/{id} {
+      allow read: if isMember();
+      allow create: if isMember() && validNotice(request.resource.data) && createdNow(request.resource.data);
+      allow update: if isMember() && creatorOrAdmin() && validNotice(request.resource.data) && keepsCreator();
+      allow delete: if isMember() && creatorOrAdmin();
+    }
+
+    match /notes/{id} {
+      allow read: if isMember();
+      allow create: if isMember() && validNote(request.resource.data) && createdNow(request.resource.data);
+      allow update: if isMember() && validNote(request.resource.data) && keepsCreator();
+      allow delete: if isMember() && creatorOrAdmin();
+    }
+
+    // ---------- family tree (everyone may add and change people) ----------
+
+    // Up to max document IDs (letters and digits), no duplicates.
+    function idList(l, max) {
+      return l is list && l.size() <= max && l.toSet().size() == l.size()
+        && (l.size() == 0
+          || (l.join('|').matches('^[A-Za-z0-9]{1,40}([|][A-Za-z0-9]{1,40})*$') && l.join('|').split('[|]') == l));
+    }
+
+    function validYear(y) {
+      return y == null || (y is int && y >= 1700 && y <= 2100);
+    }
+
+    function validTreePerson(d) {
+      return d.keys().hasOnly(['name', 'birthYear', 'deathYear', 'mail', 'parents', 'partners', 'birthdayId', 'note',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt', 'updatedBy'])
+        && d.keys().hasAll(['name', 'birthYear', 'deathYear', 'mail', 'parents', 'partners', 'birthdayId', 'note',
+          'createdBy', 'createdByName', 'createdAt', 'updatedAt', 'updatedBy'])
+        && title(d.name, 60)
+        && validYear(d.birthYear)
+        && validYear(d.deathYear)
+        && (d.birthYear == null || d.deathYear == null || d.deathYear >= d.birthYear)
+        && isMailOrEmpty(d.mail)
+        && idList(d.parents, 2)
+        && idList(d.partners, 6)
+        && d.birthdayId is string && d.birthdayId.size() <= 40
+        && optText(d.note, 500)
+        && d.updatedAt == request.time
+        && d.updatedBy == request.auth.uid;
+    }
+
+    match /tree/{id} {
+      allow read: if isMember();
+      allow create: if isMember() && validTreePerson(request.resource.data) && createdNow(request.resource.data);
+      allow update: if isMember() && validTreePerson(request.resource.data) && keepsCreator();
+      allow delete: if isMember() && creatorOrAdmin();
+    }
+
+    // ---------- question of the day: see the others' answers after giving your own ----------
+
+    match /days/{day}/answers/{uid} {
+      // Your own answer always (also to see whether you answered); the others' once you answered.
+      allow get: if isMember() && isoDay(day) && uid == request.auth.uid;
+      allow read: if isMember()
+        && isoDay(day)
+        && exists(/databases/$(database)/documents/days/$(day)/answers/$(request.auth.uid));
+      allow create: if isMember()
+        && isoDay(day)
+        && uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['text', 'name', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['text', 'name', 'createdAt', 'updatedAt'])
+        && title(request.resource.data.text, 500)
+        && request.resource.data.name == myName()
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isMember()
+        && uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'name', 'updatedAt'])
+        && title(request.resource.data.text, 500)
+        && request.resource.data.name == myName()
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isMember() && (uid == request.auth.uid || isAdmin());
+    }
+
+    // ---------- chat translations by Claude ----------
+    //
+    // The app asks for a translation by creating translations/{id}; a Cloud
+    // Function then reads that one message, asks Claude and writes the result
+    // here. Only people who may read the message can ask or read, and only
+    // while the message exists. The ID is fixed per message and language, so
+    // each translation is made once and shared by everyone in the room.
+
+    function canUseAnyRoom(household, roomId) {
+      return (household == '' && canUseRoom(roomId))
+        || (household != '' && roomId == 'main'
+          && myMail() in get(/databases/$(database)/documents/households/$(household)).data.members);
+    }
+
+    function messageExists(household, roomId, messageId) {
+      return (household == '' && exists(/databases/$(database)/documents/rooms/$(roomId)/messages/$(messageId)))
+        || (household != '' && exists(/databases/$(database)/documents/households/$(household)/rooms/$(roomId)/messages/$(messageId)));
+    }
+
+    function messageExistsAfter(household, roomId, messageId) {
+      return (household == '' && existsAfter(/databases/$(database)/documents/rooms/$(roomId)/messages/$(messageId)))
+        || (household != '' && existsAfter(/databases/$(database)/documents/households/$(household)/rooms/$(roomId)/messages/$(messageId)));
+    }
+
+    function translationsOn() {
+      return !exists(/databases/$(database)/documents/config/translate)
+        || get(/databases/$(database)/documents/config/translate).data.get('enabled', true) == true;
+    }
+
+    match /translations/{id} {
+      // One translation at a time (the app never lists them). A missing one may
+      // be asked for (the app waits for it); an existing one only by people who
+      // may read the message, while it exists.
+      allow get: if isMember()
+        && (resource == null
+          || (canUseAnyRoom(resource.data.household, resource.data.roomId)
+            && messageExists(resource.data.household, resource.data.roomId, resource.data.messageId)));
+      allow list: if false;
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['household', 'roomId', 'messageId', 'lang', 'uid', 'createdAt', 'status'])
+        && request.resource.data.keys().hasAll(['household', 'roomId', 'messageId', 'lang', 'uid', 'createdAt', 'status'])
+        && request.resource.data.household is string && request.resource.data.household.size() <= 40
+        && request.resource.data.roomId is string && request.resource.data.roomId.size() >= 1 && request.resource.data.roomId.size() <= 40
+        && request.resource.data.messageId is string && request.resource.data.messageId.size() >= 1 && request.resource.data.messageId.size() <= 40
+        && request.resource.data.lang in ['de', 'en', 'fr']
+        && id == 't_' + request.resource.data.household + '_' + request.resource.data.roomId + '_'
+          + request.resource.data.messageId + '_' + request.resource.data.lang
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'pending'
+        && translationsOn()
+        && canUseAnyRoom(request.resource.data.household, request.resource.data.roomId)
+        && messageExists(request.resource.data.household, request.resource.data.roomId, request.resource.data.messageId);
+      // Removed with its message, or after a failed attempt (to try again).
+      allow delete: if isMember()
+        && canUseAnyRoom(resource.data.household, resource.data.roomId)
+        && (!messageExistsAfter(resource.data.household, resource.data.roomId, resource.data.messageId)
+          || resource.data.status == 'error');
+    }
+
+    match /config/translate {
+      allow read: if isMember();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['enabled', 'updatedAt', 'updatedBy'])
+        && request.resource.data.keys().hasAll(['enabled', 'updatedAt', 'updatedBy'])
+        && request.resource.data.enabled is bool
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == myMail();
     }
 
     // ---------- households: groups with their own calendar, tasks, polls, chat room ----------
@@ -594,6 +861,37 @@ service cloud.firestore {
         allow create: if inHousehold() && validNewPoll(request.resource.data);
         allow update: if inHousehold() && validVote();
         allow update: if inHousehold() && creatorOrAdmin() && validCloseChange();
+        allow delete: if inHousehold() && creatorOrAdmin();
+      }
+
+      match /trips/{tripId} {
+        allow read: if inHousehold();
+        allow create: if inHousehold() && validTrip(request.resource.data) && createdNow(request.resource.data);
+        allow update: if inHousehold() && creatorOrAdmin() && validTrip(request.resource.data) && keepsCreator();
+        allow delete: if inHousehold() && creatorOrAdmin();
+
+        match /items/{itemId} {
+          allow read: if inHousehold();
+          allow create: if inHousehold()
+            && exists(/databases/$(database)/documents/households/$(h)/trips/$(tripId))
+            && validTripItem(request.resource.data) && createdNow(request.resource.data);
+          allow update: if inHousehold() && creatorOrAdmin() && validTripItem(request.resource.data) && keepsCreator();
+          allow delete: if inHousehold()
+            && (creatorOrAdmin() || get(/databases/$(database)/documents/households/$(h)/trips/$(tripId)).data.createdBy == request.auth.uid);
+        }
+      }
+
+      match /notices/{id} {
+        allow read: if inHousehold();
+        allow create: if inHousehold() && validNotice(request.resource.data) && createdNow(request.resource.data);
+        allow update: if inHousehold() && creatorOrAdmin() && validNotice(request.resource.data) && keepsCreator();
+        allow delete: if inHousehold() && creatorOrAdmin();
+      }
+
+      match /notes/{id} {
+        allow read: if inHousehold();
+        allow create: if inHousehold() && validNote(request.resource.data) && createdNow(request.resource.data);
+        allow update: if inHousehold() && validNote(request.resource.data) && keepsCreator();
         allow delete: if inHousehold() && creatorOrAdmin();
       }
 

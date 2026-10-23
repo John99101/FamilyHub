@@ -128,6 +128,37 @@ export function createFirestoreStore(db) {
       await db.doc(`${base}digest/current`).set(fields, { merge: true });
     },
 
+    // ---------- chat translations ----------
+
+    async getTranslateSwitch() {
+      return read('config/translate');
+    },
+
+    /** The message a translation request points to (family room or household room). */
+    async getMessage({ household, roomId, messageId }) {
+      const path = household
+        ? `households/${household}/rooms/${roomId}/messages/${messageId}`
+        : `rooms/${roomId}/messages/${messageId}`;
+      return read(path);
+    },
+
+    /** Counts one translation for a person and day; false when the daily limit is reached. */
+    async useTranslationQuota(uid, day, limit) {
+      const ref = db.doc(`translateUsage/${uid}`);
+      return db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const data = snap.exists ? snap.data() : {};
+        const count = data.day === day ? data.count || 0 : 0;
+        if (count >= limit) return false;
+        tx.set(ref, { day, count: count + 1 });
+        return true;
+      });
+    },
+
+    async saveTranslation(id, fields) {
+      await db.doc(`translations/${id}`).set(fields, { merge: true });
+    },
+
     async listHouseholds() {
       const snap = await db.collection('households').get();
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }));

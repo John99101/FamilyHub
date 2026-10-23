@@ -4,6 +4,7 @@ import { db, doc, setDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } 
 import { $, el, avatar, toast, formatDateTime } from './ui.js';
 import { SYMBOL_PATTERN, WATCHLIST_MAX, findQuote, toDate } from './market-data.js';
 import { t, locale, languageChoice, setLanguageChoice } from './i18n.js';
+import { isSimpleMode, setSimpleMode } from './simple.js';
 
 const THEME_KEY = 'familyhub-theme';
 const MAX_MEMBERS = 100;
@@ -260,10 +261,31 @@ export function createSettings(session, { onSignOut, marketData, familyData }) {
     }
   };
 
+  const translateSwitch = $('translate-switch');
+  translateSwitch.onchange = async () => {
+    const enabled = translateSwitch.checked;
+    try {
+      await setDoc(doc(db, 'config', 'translate'), { enabled, updatedAt: serverTimestamp(), updatedBy: session.mail });
+      toast(t(enabled ? 'settings.translateOn' : 'settings.translateOff'));
+    } catch (err) {
+      console.warn('Saving the translation switch failed', err.code);
+      toast(t('common.saveFailed'));
+      translateSwitch.checked = !enabled;
+    }
+  };
+
   function renderDigestAdmin(state) {
     digestCard.hidden = !session.isAdmin;
-    if (session.isAdmin) digestSwitch.checked = state.digestSwitch?.enabled !== false;
+    if (!session.isAdmin) return;
+    digestSwitch.checked = state.digestSwitch?.enabled !== false;
+    translateSwitch.checked = state.translateSwitch?.enabled !== false;
   }
+
+  // ---------- simple mode (this device only) ----------
+
+  const simpleSwitch = $('simple-switch');
+  simpleSwitch.checked = isSimpleMode();
+  simpleSwitch.onchange = () => setSimpleMode(simpleSwitch.checked);
 
   renderAccess();
   const stopMarket = marketData.subscribe((state) => { renderWatch(state); renderMarketAdmin(state); });

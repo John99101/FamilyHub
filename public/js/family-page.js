@@ -4,6 +4,7 @@ import { db, collection, doc, setDoc, updateDoc, deleteDoc, serverTimestamp } fr
 import { $, el, svgIcon, toast, card, emptyNote, addButton } from './ui.js';
 import { t } from './i18n.js';
 import { PALETTE, paint } from './colors.js';
+import { NAME_MAX } from './names.js';
 import { openForm } from './dialog.js';
 
 const CHECK_ICON = ['m5 12 5 5 9-10'];
@@ -19,6 +20,36 @@ export function createFamilyPage(data) {
   let busy = false;
 
   // ---------- my color ----------
+
+  // ---------- my visible name ----------
+
+  // Built once, so a live update never wipes what someone is typing.
+  const nameInput = el('input', { type: 'text', maxlength: NAME_MAX, autocomplete: 'off', 'aria-label': t('family.myName') });
+  const nameError = el('p', { class: 'form-error', role: 'alert' });
+  const resetButton = el('button', { class: 'btn-link', type: 'button', text: t('family.useGoogleName') });
+  const nameForm = el('form', { class: 'add-row', novalidate: true }, [
+    nameInput,
+    el('button', { class: 'btn btn-primary btn-small', type: 'submit', text: t('common.save') }),
+  ]);
+  const nameHint = el('p', { class: 'muted small' });
+  const nameBox = card(t('family.myName'), [nameHint, nameForm, nameError, resetButton]);
+
+  async function saveName(value) {
+    nameError.textContent = '';
+    const problem = await data.setMyName(value);
+    if (problem) nameError.textContent = t(`family.name.${problem}`);
+    else toast(t('family.nameSaved'));
+  }
+  nameForm.addEventListener('submit', (event) => { event.preventDefault(); saveName(nameInput.value); });
+  resetButton.addEventListener('click', () => { nameInput.value = data.myGoogleName(); saveName(''); });
+
+  function nameCard() {
+    const chosen = data.myDisplayName();
+    if (document.activeElement !== nameInput) nameInput.value = chosen || data.myGoogleName();
+    nameHint.textContent = t('family.myNameHint', { name: data.myGoogleName() || '?' });
+    resetButton.hidden = !chosen;
+    return nameBox;
+  }
 
   function colorCard() {
     const mine = data.myColor();
@@ -63,6 +94,8 @@ export function createFamilyPage(data) {
       const sub = [];
       if (p.me) sub.push(t('home.you'));
       if (p.nickname) sub.push(t('family.realName', { name: p.realName }));
+      // So nobody can hide behind a chosen name: the Google name is always shown here.
+      if (p.displayName && p.googleName && p.googleName !== p.displayName) sub.push(t('family.googleName', { name: p.googleName }));
       if (!p.uid) sub.push(t('family.notSignedIn'));
       return el('li', { class: 'person-row' }, [
         personDot(p.color),
@@ -176,7 +209,7 @@ export function createFamilyPage(data) {
   }
 
   function render() {
-    root.replaceChildren(...[rulesNotice(), colorCard(), peopleCard(), householdsCard()].filter(Boolean));
+    root.replaceChildren(...[rulesNotice(), nameCard(), colorCard(), peopleCard(), householdsCard()].filter(Boolean));
   }
 
   let visible = false;

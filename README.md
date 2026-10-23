@@ -6,20 +6,32 @@ and French (it follows the browser; changeable in the settings).
 
 - **Sign in with Google only.** Only mail addresses on an allow list get in;
   everyone else sees "Kein Zugang".
-- **Start** (home): greeting, the weekly overview by Claude, the next 7 days,
-  upcoming birthdays, tasks for you, polls waiting for your vote, the newest
-  chat messages, the weather.
+- **Start** (home): greeting, pinned notices, the weekly overview by Claude,
+  the question of the day, the next trip, the next 7 days, upcoming birthdays,
+  tasks for you, polls waiting for your vote, the newest chat messages, the
+  weather.
 - **Family chat**: the main room "Familie" plus rooms anyone can open, for
   everyone or only for chosen people. Text up to 2000 characters, replies,
   reactions, live updates, older messages in pages of 50, "new" markers.
   Members delete their own messages, admins any message. Not end to end
   encrypted (the settings page says so).
+- **Translate chat messages**: tap **Übersetzen** under someone's message to
+  read it in your app language (German, English or French), translated by
+  Claude Opus 5.5. Only that one message is sent to Anthropic, for a fraction
+  of a cent. Each translation is made once and shared by everyone in the
+  room; at most 100 per person and day; admins can switch it off.
+- **Simple mode** for grandparents: large text and only the essentials
+  (today's and tomorrow's dates, big call buttons for important contacts, the
+  main chat). Each person switches it on for their own device under
+  **Einstellungen**; admins mark which contacts get a call button.
 - **Kalender** (calendar): month view, appointments (one day, several days,
   every year) and birthdays with age. Each entry is "for" a person and shows
   in that person's color; entries over several days are a colored line from
   the first to the last day.
 - **Colors and names**: everyone picks one of 16 colors (no color twice; a
-  free one is given automatically on first sign in). Everyone can give the
+  free one is given automatically on first sign in). Everyone can change the
+  name the whole family sees ("Benni" instead of the Google name; no name
+  twice, and "Google Namen verwenden" goes back). Everyone can also give the
   others their own names ("Mama"); only the person who gave a name sees it.
 - **Households**: admins set up groups (for example "Zürich", "Bei Oma"); a
   person can be in several. Calendar entries, tasks and polls belong to the
@@ -28,10 +40,28 @@ and French (it follows the browser; changeable in the settings).
   who are not in it do not either). Recipes, contacts and weather stay shared.
 - **Aufgaben** (tasks): quick add, who does it and by when, anyone can tick a
   task off, recently done tasks.
-- **Mehr** (more): **Familie** (colors, names, households), **Umfragen** (polls with one or several answers),
+- **Mehr** (more): **Familie** (your name, colors, names for others,
+  households), **Pinnwand**, **Reisen**, **Frage des Tages**, **Stammbaum**
+  (all four below), **Umfragen** (polls with one or several answers),
   **Rezepte** (family cookbook), **Kontakte** (contacts and emergency info,
   only admins edit), **Wetter** (weather for the family's places, from
   Open-Meteo), Börse, Risiko and Einstellungen.
+- **Pinnwand** (notice board and family notebook): short notices ("Müllabfuhr
+  ist diese Woche am Dienstag"), optionally until a date, shown on the Start
+  page; plus notebook pages with how to notes ("Heizung entlüften") that
+  anyone in the group may improve (the page shows who changed it last).
+- **Reisen** (trip planner): trips with destination, dates and who is
+  coming, journeys with times, accommodation, and a plan for each day. Trips
+  also show as a line in the calendar.
+- **Frage des Tages** (question of the day): one question a day for the whole
+  family (40 questions in turn, in three languages). You see the others'
+  answers only after giving your own.
+- **Stammbaum** (family tree): parents, children and partners with birth (and
+  death) years, drawn as a tree with zoom. Tapping a person shows their
+  birthday from the calendar; people who use the app show in their color.
+  Everyone can add and change people.
+- Notices, notebook pages and trips belong to the whole family or to one
+  household, like calendar entries.
 - **Weekly overview**: every Sunday at 17:00 Berlin time, Claude Opus 5.5
   writes a short overview of the coming week in German, English and French
   from the calendar, due tasks and open polls.
@@ -44,9 +74,9 @@ and French (it follows the browser; changeable in the settings).
   change, beta and correlation to the S&P 500, plus the whole watchlist), and
   a short daily summary in English and French written by Claude Opus 5.5.
   Describes the past only; no advice.
-- **Einstellungen** (settings): language, light or dark look, the watchlist,
-  the market and AI switches (admins only), allow list and admins (admins
-  only), sign out.
+- **Einstellungen** (settings): language, light or dark look, simple mode
+  for this device, the watchlist, the market, overview and translation
+  switches (admins only), allow list and admins (admins only), sign out.
 
 Setup for the owner: see **[SETUP.md](SETUP.md)**.
 
@@ -69,6 +99,8 @@ Browser (public/)                Firebase (Google, region europe-west3)
                                      │          weeklyDigest, Sunday 17:00 Berlin time
                                      │          sends the coming week's calendar entries,
                                      │          due tasks and open polls (nothing else)
+                                     │          translateMessage, when someone taps
+                                     │          Übersetzen: sends that one message text
                                      ▼
                                   Anthropic API (Claude Opus 5.5)
 
@@ -76,6 +108,7 @@ Browser (public/)                Firebase (Google, region europe-west3)
                                                 deletes its messages
                                   Functions     cleanupHousehold, when a household is deleted:
                                                 deletes everything inside it
+                                                (both also delete the rooms' translations)
 
  Weather page ──────────────────► Open-Meteo (forecast and place search, no key,
                                   only the rough coordinates of saved places)
@@ -113,6 +146,21 @@ Keys (NGN_API_KEY, ANTHROPIC_API_KEY) live only in Secret Manager.
   outputs; hyphens and dashes are removed again as a safety net. If Claude
   declines, Anthropic's server side fallback (`fallbacks: "default"`) retries
   once on another model; a failed day keeps the last summary visible.
+- **Chat translations** (`functions/translate.js`): the browser never calls
+  Anthropic. Tapping **Übersetzen** creates `translations/{id}` with only the
+  message's place and the wanted language; the rules allow that only to
+  people who may read the message, and the ID is fixed per message and
+  language. The function `translateMessage` then reads that one message
+  itself, sends only its text to Claude Opus 5.5 (low effort, structured
+  output `{ text, sourceLanguage }`), and writes the translation into the same
+  document, which the chat shows below the message. No names, no other
+  messages, no mail addresses are sent; Claude is told never to follow
+  instructions inside the message. Daily limit: 100 per person
+  (`translateUsage/{uid}`, written only by the function). Admins switch it
+  off with `config/translate`. When a message is deleted, its translations
+  are deleted with it.
+- **Simple mode** is a setting of the device (stored in the browser), not of
+  the person: the same person can use the full app on their own phone.
 - The service worker (`public/sw.js`) caches only the page files (HTML, CSS,
   JS, icons), never chat or market data.
 
@@ -124,11 +172,13 @@ Keys (NGN_API_KEY, ANTHROPIC_API_KEY) live only in Secret Manager.
 | `config/watchlist` | `symbols: [..]` (max 10), `updatedAt`, `updatedBy` | members |
 | `config/market` | `enabled` (market on/off), `aiEnabled` (AI summary on/off), `updatedAt`, `updatedBy`; missing values count as on | admins |
 | `config/digest` | `enabled` (weekly overview on/off), `updatedAt`, `updatedBy`; missing counts as on | admins |
-| `people/{uid}` | `name`, `mail`, `photo` as Google gave them, `color` | each person, only their own |
+| `config/translate` | `enabled` (chat translations on/off), `updatedAt`, `updatedBy`; missing counts as on | admins |
+| `people/{uid}` | `name`, `mail`, `photo` as Google gave them, `color`, optional `displayName` (the visible name) | each person, only their own |
+| `names/{name}` | `uid`: who uses a visible name. The document ID is the name, so it can only exist once | each person for themselves, together with their `displayName`; locks nobody uses any more can be removed by anyone |
 | `colors/{color}` | `uid`: who holds the color. The document ID is the color, so it can only exist once | each person for themselves, together with their `people` color; an admin may free the color of someone who left |
 | `nicknames/{uid}` | `names: { mail: name }`, `updatedAt` | only that person; nobody else can read it |
 | `households/{h}` | `name`, `members: [mail]`, `updatedAt`, `updatedBy` | admins (everyone reads) |
-| `households/{h}/events`, `/tasks`, `/polls` | same fields as the family ones | members of the household only (read and write) |
+| `households/{h}/events`, `/tasks`, `/polls`, `/trips` (+ `items`), `/notices`, `/notes` | same fields as the family ones | members of the household only (read and write) |
 | `households/{h}/rooms/main` (+ `messages`) | the household's chat room | members of the household only |
 | `households/{h}/digest/current` | the household's weekly overview | Cloud Function only; read by members |
 | `rooms/familie` | `name`, `createdAt`, `last` (preview of the newest message) | an admin once (the app does it); `last`: everyone |
@@ -138,8 +188,16 @@ Keys (NGN_API_KEY, ANTHROPIC_API_KEY) live only in Secret Manager.
 | `tasks/{id}` | `title`, `note`, `assignee` (mail or empty), `due`, `done`, `doneAt`, `doneBy`, created and updated fields | members; tick off: anyone; change: creator or admin; delete: creator, admin, or anyone once done |
 | `polls/{id}` | `question`, `options` (2 to 10), `multi`, `closed`, `votes { uid: [answer numbers] }`, created fields | members; vote: each person only their own; close and delete: creator or admin |
 | `recipes/{id}` | `title`, `category`, `servings`, `duration`, `ingredients`, `steps`, `source`, created and updated fields | members; change and delete: creator or admin |
-| `contacts/{id}` | `name`, `group`, `phone`, `phone2`, `mail`, `address`, `note`, `updatedAt`, `updatedBy` | admins only (everyone reads) |
+| `contacts/{id}` | `name`, `group`, `phone`, `phone2`, `mail`, `address`, `note`, `quick` (big call button in simple mode), `updatedAt`, `updatedBy` | admins only (everyone reads) |
 | `places/{id}` | `name`, `country`, `lat`, `lon`, created fields | members; delete: creator or admin |
+| `trips/{id}` | `title`, `destination`, `start`, `end`, `people: [mail]`, `note`, created and updated fields | members; change and delete: creator or admin |
+| `trips/{id}/items/{id}` | `kind` (day, stay, travel), `date`, `endDate`, `time`, `title`, `place`, `note`, created and updated fields | members; change: creator or admin; delete: also the trip's creator |
+| `notices/{id}` | `text` (up to 300 characters), `until` (day or empty), created and updated fields | members; change and delete: creator or admin |
+| `notes/{id}` | `title`, `body` (up to 10,000 characters), created fields, `updatedAt`, `updatedBy`, `updatedByName` | members, anyone may change; delete: creator or admin |
+| `tree/{id}` | `name`, `birthYear`, `deathYear`, `mail` (links to an app user for the color), `parents` (up to 2 IDs), `partners`, `birthdayId` (calendar entry), `note`, created fields, `updatedAt`, `updatedBy` | members, anyone may change; delete: creator or admin |
+| `days/{day}/answers/{uid}` | `text`, `name`, `createdAt`, `updatedAt` | each person only their own; the others' answers are readable only once your own answer exists |
+| `translations/{id}` | request: `household`, `roomId`, `messageId`, `lang`, `uid`, `createdAt`, `status`; result: `text`, `from`, `model`, `usage`, `translatedAt` or `reason` | request: people who may read the message; result: Cloud Function only |
+| `translateUsage/{uid}` | `day`, `count` (translations today) | Cloud Function only; nobody reads it in the app |
 | `digest/current` | `weekStart`, `weekEnd`, `de`, `en`, `fr`, `empty`, `model`, `usage`, `lastError` | Cloud Function only |
 | `market/latest` | `updatedAt`, `quotes` (top 200), `indices`, `extras` (watchlist symbols outside the top 200) | Cloud Function only |
 | `market/status` | state, pause time, calls used and remaining, quota reset, last error, unknown symbols | Cloud Function only |
@@ -228,24 +286,28 @@ available to any third party). Neither fits.
 
 Checked on 22 October 2026 (code review, `npm audit` with 0 findings in both
 package folders, secret scan of the whole git history with 0 findings), and
-again for the family hub parts on 23 October 2026.
+again for the family hub parts, the visible names, translations, trips,
+notice board, notebook, family tree and question of the day on 23 October
+2026.
 
 | Layer | Protection |
 | :- | :- |
 | Sign in | Google only; verified mail; the rules also check the sign in provider |
 | Access | allow list in `config/access`, checked by the rules on every read and write |
-| Data | deny by default; every field of every write checked (`firestore.rules`, 82 tests); market, AI and overview documents written only by the functions |
+| Data | deny by default; every field of every write checked (`firestore.rules`, 105 tests); market, AI, overview and translation results written only by the functions |
 | Households | everything inside a household (calendar, tasks, polls, chat, overview) is readable and writable only by its members, admins included; the rules check membership by the path |
 | Nicknames | each person's names for others live in a document only that person can read |
-| Colors | a color is a document named after it, so two people can never hold the same one |
+| Colors and visible names | a color (and a visible name) is a document named after it, so two people can never hold the same one |
+| Question of the day | the rules hide the others' answers until your own answer exists |
+| Translations | only people who may read a message can ask for its translation or read it, and only while the message exists; translations cannot be listed; 100 per person and day |
 | Allow list | only admins change it; entries must be lower case mail addresses without duplicates; an admin cannot remove themselves |
 | Private rooms | invisible to everyone not listed, admins included; the rules check every message read and write against the room |
 | Contacts | everyone in the family reads them (they may hold health notes); only admins write; phone links can only dial digits |
 | Page | no HTML is ever built from data (text is always set as text); profile photos only from `googleusercontent.com` |
 | Browser | strict Content Security Policy and headers (below); service worker stores page files only |
 | Keys | only in Secret Manager, each one given only to the function that needs it; nothing secret in git |
-| Server | no public endpoints: three functions run on a timer, two run when a room or a household is deleted; no automatic retries |
-| AI | risk summary: numbers and stock names only. Weekly overview: the coming week's calendar titles, due tasks and poll questions, never notes, chat, contacts, recipes or mail addresses. Answers are shown as plain text |
+| Server | no public endpoints: three functions run on a timer, two run when a room or a household is deleted, one when a translation is asked for; no automatic retries |
+| AI | risk summary: numbers and stock names only. Weekly overview: the coming week's calendar titles, due tasks and poll questions, never notes, chat, contacts, recipes or mail addresses. Translation: only the text of the one message someone tapped, never names or mail addresses. Answers are shown as plain text |
 | Weather | the browser asks Open-Meteo with rounded coordinates of saved places only |
 | Costs | budget alert, NGN budget guard, Anthropic spend limit |
 | Still to do by the owner | App Check (SETUP step 6) and the console steps in SETUP step 8 (2 Step Verification, key restriction, delete protection) |
@@ -276,12 +338,21 @@ public/                 the website (served by Firebase Hosting)
   css/app.css           styles, mobile first, light and dark
   css/family.css        styles for the family hub pages, dialogs and chat extras
   css/house.css         styles for colors, nicknames, households and calendar lines
+  css/more.css          styles for translations, notice board, trips, question, tree, simple mode
   js/firebase-config.js web config of your project (not secret) and the App Check key
   js/firebase.js        loads the pinned Firebase SDK, emulators on localhost
   js/app.js             sign in, allow list check, navigation, starts the pages
   js/family-data.js     live copies of the family and household documents, names, colors
-  js/family-page.js     Familie page (colors, nicknames, households)
+  js/family-page.js     Familie page (your name, colors, nicknames, households)
   js/colors.js          the 16 person colors
+  js/names.js           visible names: checks and the name locks (tested in Node)
+  js/board.js           Pinnwand page (notices and notebook)
+  js/trips.js           Reisen page (trips, days, accommodation, journeys)
+  js/question-page.js   Frage des Tages page
+  js/questions.js       the 40 questions in three languages and which one is today's
+  js/tree.js            Stammbaum page (drawing, zoom, person dialog, editor)
+  js/tree-layout.js     places the people of the tree (tested in Node)
+  js/simple.js          simple mode switch for this device
   js/groups.js          household filter, form field and badge
   js/home.js            Start page
   js/chat.js            chat: rooms, replies, reactions, "new" markers
@@ -297,7 +368,7 @@ public/                 the website (served by Firebase Hosting)
   js/risk-page.js       Risiko page (risk figures and AI summary)
   js/market-data.js     live copies of the market documents
   js/settings.js        settings
-  js/strings.js         app text in German, English and French (plus strings-family.js, strings-house.js)
+  js/strings.js         app text in German, English and French (plus strings-family.js, strings-house.js, strings-more.js)
   js/i18n.js            picks the language, fills the page text
   js/ui.js              small helpers (safe text, dates in the chosen language, cards)
   js/theme-boot.js      applies light or dark before the page is drawn
@@ -305,12 +376,13 @@ public/                 the website (served by Firebase Hosting)
   sw.js                 service worker (page files only)
   icons/                own icons (house with heart), made by scripts/make-icons.mjs
 functions/              Cloud Functions (Node.js 22, firebase-functions v2 API)
-  index.js              marketUpdate, riskSummary, weeklyDigest, cleanupRoom, cleanupHousehold
+  index.js              marketUpdate, riskSummary, weeklyDigest, translateMessage, cleanupRoom, cleanupHousehold
   ngn-client.js         small NGN Market client
   market.js             trading days, budget guard, parsing, the market run
   risk.js               risk figures in plain code (volatility, drawdown, beta, ...)
   ai-summary.js         daily summary with Claude Opus 5.5 (prompt, request, checks)
   digest.js             weekly family overview with Claude Opus 5.5
+  translate.js          chat translations with Claude Opus 5.5 (prompt, request, daily limit)
   firestore-store.js    reading and writing the documents the functions use
   test/                 function tests with stub APIs (no real calls)
   scripts/demo-stub-data.mjs     fills the LOCAL emulator with made up market data and a demo summary
@@ -318,8 +390,10 @@ functions/              Cloud Functions (Node.js 22, firebase-functions v2 API)
 tests/rules.test.js     security rules tests (Firestore emulator)
 tests/rules-family.test.js  security rules tests for the family hub parts
 tests/rules-households.test.js  security rules tests for colors, nicknames and households
-tests/strings.test.js   app text checks (same keys in 3 languages, no dashes, "Mail")
+tests/rules-extra.test.js  security rules tests for names, translations, trips, notices, notebook, tree, question
+tests/strings.test.js   app text checks (same keys in 3 languages, no dashes, "Mail", the questions)
 tests/dates.test.js     calendar day checks (birthdays, several days, 29 February, calendar lines)
+tests/colors.test.js, names.test.js, tree-layout.test.js  checks for colors, visible names and the tree layout
 scripts/serve-local.mjs local web server with the same headers (for testing)
 scripts/make-icons.mjs  draws the icons
 firebase.json           Hosting, headers, Firestore, Functions, emulators
@@ -337,7 +411,7 @@ deployed function runs on Node.js 22).
 ```
 npm install
 npm --prefix functions install
-npm test               # 17 text and date checks + 76 function tests + 82 rules tests
+npm test               # 35 text, date, color, name and tree checks + 84 function tests + 105 rules tests
 npm run emulators      # local site on http://127.0.0.1:5000, Emulator UI on :4000
 npm run demo:market    # (second window) made up market data for the local site
 npm run demo:family    # (second window) made up family data; sign in as chef@example.com

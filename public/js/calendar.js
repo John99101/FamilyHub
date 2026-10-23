@@ -28,6 +28,7 @@ const BIRTHDAY_COLOR = 'var(--birthday)';
 
 /** The color of an entry: the person it is for, nobody (grey), or (older entries) its creator. */
 export function entryColor(data, e) {
+  if (e.kind === 'trip') return 'var(--primary)';
   if ('person' in e) {
     if (e.person) return data.colorForMail(e.person);
     return e.kind === 'birthday' ? BIRTHDAY_COLOR : NEUTRAL;
@@ -53,6 +54,7 @@ export function entryMeta(data, item, day) {
 
 export function entryIcon(e) {
   if (e.kind === 'birthday') return CAKE;
+  if (e.kind === 'trip') return '✈️';
   return e.repeat === 'yearly' ? REPEAT : '';
 }
 
@@ -78,6 +80,14 @@ export function createCalendar(data) {
   let month = monthOf(todayIso());
   let selected = todayIso();
   let filter = ALL;
+  let openTrip = () => {};
+
+  // Trips appear as entries from their first to their last day.
+  const tripEntries = () => data.state.trips.map((tr) => ({
+    id: tr.id, title: tr.title, date: tr.start, endDate: tr.end > tr.start ? tr.end : '', time: '',
+    place: tr.destination || '', note: '', kind: 'trip', repeat: 'none', person: '',
+    household: tr.household, path: tr.path, createdBy: tr.createdBy, createdByName: tr.createdByName,
+  }));
 
   async function loadPast(m) {
     pastCache.set(m, null);
@@ -107,7 +117,7 @@ export function createCalendar(data) {
         dated = [...dated, ...past.filter((e) => !paths.has(e.path))];
       }
     }
-    const events = [...dated, ...data.state.yearly].filter((e) => inGroup(e, filter));
+    const events = [...dated, ...data.state.yearly, ...tripEntries()].filter((e) => inGroup(e, filter));
     return { events, byDay: entriesByDay(events, days[0], days[days.length - 1]) };
   }
 
@@ -198,6 +208,7 @@ export function createCalendar(data) {
   // ---------- details and editing ----------
 
   function openEntry(e) {
+    if (e.kind === 'trip') { openTrip(e.path); return; }
     if (canEdit(session, e)) { openEditor(e); return; }
     const lines = [];
     const day = e.repeat === 'yearly' ? formatDayMonth(e.date) : formatWeekdayDay(e.date);
@@ -315,6 +326,8 @@ export function createCalendar(data) {
     /** Opens the calendar on a day (from the Start page). */
     showDay(day) { selected = day; month = monthOf(day); render(); },
     open: openEntry,
+    /** How to open a trip from the calendar (set by app.js). */
+    setTripOpener(fn) { openTrip = fn; },
     add() { openEditor(null); },
     stop() { stop(); root.replaceChildren(); },
   };

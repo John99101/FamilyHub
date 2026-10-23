@@ -6,6 +6,7 @@
 
 import { FAMILY_STRINGS } from './strings-family.js';
 import { HOUSE_STRINGS } from './strings-house.js';
+import { MORE_STRINGS } from './strings-more.js';
 
 const BASE = {
   de: {
@@ -491,5 +492,5 @@ const BASE = {
 
 // The family hub texts live in strings-family.js and strings-house.js and are merged in here.
 export const STRINGS = Object.fromEntries(
-  Object.keys(BASE).map((lang) => [lang, { ...BASE[lang], ...FAMILY_STRINGS[lang], ...HOUSE_STRINGS[lang] }]),
+  Object.keys(BASE).map((lang) => [lang, { ...BASE[lang], ...FAMILY_STRINGS[lang], ...HOUSE_STRINGS[lang], ...MORE_STRINGS[lang] }]),
 );

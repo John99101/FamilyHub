@@ -16,14 +16,21 @@
 // Opus 5.5 and stores a short overview in German, English and French
 // (digest/current). If nothing is planned, nothing is sent.
 //
-// cleanupRoom: when a chat room is deleted in the app, deletes its messages.
-// cleanupHousehold: when an admin deletes a household, deletes everything in
-// it (calendar, tasks, polls, chat room with messages, weekly overview).
+// translateMessage: when someone asks for a chat translation (a new
+// translations/{id} document, allowed by the rules only for people who may
+// read that message), sends that one message to Claude Opus 5.5 and stores
+// the translation. Limited to 100 translations per person and day.
 //
-// The browser only ever reads Firestore; it never talks to NGN Market or
-// Anthropic and never sees a key. Keys live only in Secret Manager.
+// cleanupRoom: when a chat room is deleted in the app, deletes its messages
+// and their translations.
+// cleanupHousehold: when an admin deletes a household, deletes everything in
+// it (calendar, tasks, polls, trips, notes, chat room with messages and
+// translations, weekly overview).
+//
+// The browser only ever reads and writes Firestore; it never talks to NGN
+// Market or Anthropic and never sees a key. Keys live only in Secret Manager.
 import { onSchedule } from 'firebase-functions/scheduler';
-import { onDocumentDeleted } from 'firebase-functions/firestore';
+import { onDocumentCreated, onDocumentDeleted } from 'firebase-functions/firestore';
 import { defineSecret } from 'firebase-functions/params';
 import * as logger from 'firebase-functions/logger';
 import { initializeApp } from 'firebase-admin/app';
@@ -34,6 +41,7 @@ import { createFirestoreStore } from './firestore-store.js';
 import { runMarketUpdate } from './market.js';
 import { runRiskSummary } from './ai-summary.js';
 import { runAllDigests, DIGEST_TIME_ZONE } from './digest.js';
+import { runTranslation } from './translate.js';
 
 const NGN_API_KEY = defineSecret('NGN_API_KEY');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -121,7 +129,37 @@ export const cleanupRoom = onDocumentDeleted(
     if (roomId === 'familie') return;
     const db = getFirestore();
     await db.recursiveDelete(db.collection('rooms').doc(roomId).collection('messages'));
+    await deleteTranslations(db, '', roomId);
     logger.info('Messages of a deleted room removed', { roomId });
+  },
+);
+
+/** Translations of a deleted room (or of all rooms of a deleted household). */
+async function deleteTranslations(db, household, roomId) {
+  let q = db.collection('translations').where('household', '==', household);
+  if (roomId) q = q.where('roomId', '==', roomId);
+  const snap = await q.get();
+  const writer = db.bulkWriter();
+  for (const d of snap.docs) writer.delete(d.ref);
+  await writer.close();
+}
+
+// A new translation request: read that one message, ask Claude, store the result.
+export const translateMessage = onDocumentCreated(
+  {
+    document: 'translations/{id}', region: 'europe-west3', secrets: [ANTHROPIC_API_KEY],
+    memory: '256MiB', timeoutSeconds: 120, maxInstances: 3, retry: false,
+  },
+  async (event) => {
+    const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value(), maxRetries: 1, timeout: 60000 });
+    await runTranslation({
+      anthropic,
+      store: createFirestoreStore(getFirestore()),
+      id: event.params.id,
+      request: event.data?.data(),
+      now: new Date(),
+      logger,
+    });
   },
 );
 
@@ -132,6 +170,7 @@ export const cleanupHousehold = onDocumentDeleted(
     const db = getFirestore();
     // Deletes every collection below the (already deleted) household document.
     await db.recursiveDelete(db.collection('households').doc(householdId));
+    await deleteTranslations(db, householdId, '');
     logger.info('Contents of a deleted household removed', { householdId });
   },
 );

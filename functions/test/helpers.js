@@ -126,6 +126,23 @@ export function memoryStore(initial = {}) {
       state.householdDigests[base] = { ...(state.householdDigests[base] || {}), ...structuredClone(fields) };
     },
     async listHouseholds() { return structuredClone(state.households); },
+    // chat translations
+    async getTranslateSwitch() { return state.translateSwitch ?? null; },
+    async getMessage({ household, roomId, messageId }) {
+      const path = household ? `households/${household}/rooms/${roomId}/messages/${messageId}` : `rooms/${roomId}/messages/${messageId}`;
+      return state.messages?.[path] ? structuredClone(state.messages[path]) : null;
+    },
+    async useTranslationQuota(uid, day, limit) {
+      state.quota = state.quota || {};
+      const q = state.quota[uid] && state.quota[uid].day === day ? state.quota[uid] : { day, count: 0 };
+      if (q.count >= limit) return false;
+      state.quota[uid] = { day, count: q.count + 1 };
+      return true;
+    },
+    async saveTranslation(id, fields) {
+      state.translations = state.translations || {};
+      state.translations[id] = { ...(state.translations[id] || {}), ...structuredClone(fields) };
+    },
   };
 }
 

@@ -1,0 +1,110 @@
+/* FamilyHub styles for version 1.4: chat translation, notice board and
+   notebook, trips, question of the day, family tree, and the simple mode. */
+
+/* ---------- chat translation ---------- */
+
+.translation {
+  margin: 6px 0 2px; padding: 6px 8px; border-radius: 8px;
+  background: rgb(127 127 127 / 10%); font-size: 14.5px;
+}
+.translation p { margin: 0; }
+.translation.pending { color: var(--muted); font-style: italic; }
+.translation.error { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; color: var(--danger); }
+.translation-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.translation-note { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin-top: 2px !important; font-size: 12px; color: var(--muted); }
+.translation-note .btn-link, .translation.error .btn-link { min-height: 26px; padding: 0 4px; font-size: 12.5px; }
+
+/* ---------- notice board and notebook ---------- */
+
+.notice-list, .note-list, .trip-list, .answer-list { list-style: none; margin: 0; padding: 0; }
+.notice + .notice, .note-list li + li, .trip-list li + li { border-top: 1px solid var(--border); }
+.notice-main, .note-row, .trip-row {
+  width: 100%; display: flex; flex-direction: column; gap: 2px; text-align: left;
+  padding: 10px 2px; background: none; border: 0; color: var(--text);
+}
+.notice-text { font-weight: 600; }
+.notice-meta, .note-snippet, .trip-meta { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.card-notices { border-left: 4px solid var(--warn); }
+.note-title, .trip-title { font-weight: 700; overflow-wrap: anywhere; }
+.note-snippet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-body { line-height: 1.55; }
+.note-row:hover .note-title, .trip-row:hover .trip-title { text-decoration: underline; }
+
+/* ---------- trips ---------- */
+
+.back-row { display: inline-flex; align-items: center; gap: 4px; margin: 0 0 8px -6px; }
+.back-row svg { width: 18px; height: 18px; }
+.trip-row .member-chips { margin-top: 4px; }
+.trip-day + .trip-day { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 4px; }
+.trip-day-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.trip-day-head .home-day-title { margin-top: 6px; }
+.trip-day p.muted { margin: 2px 0 4px; }
+
+/* ---------- question of the day ---------- */
+
+.card-question { border-left: 4px solid var(--primary); }
+.question-text { font-size: 20px; font-weight: 700; line-height: 1.35; margin: 4px 0 12px; }
+.question-small { font-weight: 600; margin: 4px 0 10px; }
+.answer-form { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.answer-form textarea {
+  width: 100%; min-height: 84px; padding: 10px 12px; resize: vertical;
+  border-radius: 12px; border: 1px solid var(--border); background: var(--bg); line-height: 1.4;
+}
+.answer-form textarea:focus { outline: none; border-color: var(--primary); }
+.answer-form .btn { align-self: flex-end; }
+.answer { display: flex; flex-direction: column; gap: 2px; padding: 9px 0; border-top: 1px solid var(--border); }
+.answer:first-child { border-top: 0; }
+.answer-head { display: flex; align-items: center; gap: 6px; }
+.answer-name { font-weight: 700; font-size: 14px; }
+.earlier-day + .earlier-day { margin-top: 10px; border-top: 1px solid var(--border); }
+
+/* ---------- family tree ---------- */
+
+.content-wide { max-width: 1200px; }
+.tree-tools { display: flex; justify-content: flex-end; gap: 4px; margin: -4px 0 4px; }
+.tree-scroll {
+  overflow: auto; max-height: 70dvh; border-radius: 12px;
+  background: var(--bg); border: 1px solid var(--border); overscroll-behavior: contain;
+}
+.tree-sizer { position: relative; }
+.tree-canvas { position: relative; transform-origin: 0 0; }
+.tree-lines { position: absolute; inset: 0; pointer-events: none; }
+.tree-lines path { fill: none; stroke: var(--muted); stroke-width: 2; opacity: .6; }
+.tree-node {
+  position: absolute; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;
+  padding: 6px 8px; border-radius: 12px; text-align: center;
+  background: var(--surface); color: var(--text);
+  border: 2px solid color-mix(in srgb, var(--pc, var(--border)) 45%, var(--border));
+  box-shadow: var(--shadow);
+}
+.tree-node.linked { border-color: var(--pc); border-width: 3px; }
+.tree-node:hover { border-color: var(--primary); }
+.tree-name { font-weight: 700; font-size: 14px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tree-years { font-size: 12px; color: var(--muted); }
+.tree-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+/* ---------- simple mode (big text, only the essentials) ---------- */
+
+.simple body { font-size: 20px; }
+.simple .tab:not([data-route="start"]):not([data-route="chat"]) { display: none; }
+.simple .tab { font-size: 15px; }
+.simple .tab svg { width: 30px; height: 30px; }
+.simple .topbar h1 { font-size: 22px; }
+.simple .home-greeting { font-size: 28px; }
+.simple .card h2 { font-size: 21px; }
+.simple .entry-title, .simple .simple-main { font-size: 19px; }
+.simple .entry-time { font-size: 17px; flex-basis: 70px; }
+.simple .msg-text { font-size: 19px; }
+.simple .composer textarea { font-size: 19px; min-height: 52px; }
+.simple .send-btn { width: 52px; height: 52px; }
+.simple .room-bar { display: none; }
+.call-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.call-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-height: 84px; padding: 10px; border-radius: 16px; text-decoration: none; text-align: center;
+  background: var(--primary); color: var(--on-primary); font-weight: 700;
+}
+.call-name { font-size: 20px; line-height: 1.2; }
+.call-number { font-size: 15px; opacity: .85; font-variant-numeric: tabular-nums; }
+.big-btn { width: 100%; min-height: 56px; font-size: 19px; margin-top: 10px; }
+.simple-off { margin: 8px 0 24px; }

@@ -8,14 +8,17 @@
 // stored), so the pages can show, filter and change them.
 import {
   db, collection, doc, query, where, orderBy, limit, onSnapshot, setDoc, deleteDoc, writeBatch, serverTimestamp,
+  deleteField,
 } from './firebase.js';
 import { todayIso, addDays } from './dates.js';
 import { hexOf, NEUTRAL, planColorWork } from './colors.js';
+import { visibleName, checkDisplayName, cleanDisplayName, planNameWork } from './names.js';
+import { dayQuestionKey } from './questions.js';
 
 export const MAIN_ROOM = 'familie';
 // Multi day entries may start up to this many days before the day shown.
 export const EVENT_LOOKBACK_DAYS = 62;
-const SCOPED = ['events', 'yearly', 'tasksOpen', 'tasksDone', 'polls'];
+const SCOPED = ['events', 'yearly', 'tasksOpen', 'tasksDone', 'polls', 'trips', 'notices'];
 
 export const toDate = (v) => (v && typeof v.toDate === 'function' ? v.toDate() : v ? new Date(v) : null);
 export const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || '';
@@ -31,7 +34,12 @@ export function createFamilyData(session) {
     tasksOpen: [],
     tasksDone: [],   // the 20 most recently done (per group)
     polls: [],       // the 30 newest (per group)
+    trips: [],       // trips of the family and of this person's households
+    notices: [],     // notice board
     places: [],
+    names: {},       // visible name → uid of the person using it
+    translateSwitch: null,
+    myAnswer: null,  // own answer to today's question (null: not answered)
     people: [],
     colors: {},      // color → uid of the person holding it
     nicknames: {},   // mail → name this person gave them (only they can read it)
@@ -92,6 +100,8 @@ export function createFamilyData(session) {
       onSnapshot(query(collection(db, `${base}tasks`), where('done', '==', false)), put('tasksOpen', 'tasks'), onError(`${base}tasks`)),
       onSnapshot(query(collection(db, `${base}tasks`), where('done', '==', true), orderBy('doneAt', 'desc'), limit(20)), put('tasksDone', 'tasks'), onError(`${base}done tasks`)),
       onSnapshot(query(collection(db, `${base}polls`), orderBy('createdAt', 'desc'), limit(30)), put('polls', 'polls'), onError(`${base}polls`)),
+      onSnapshot(query(collection(db, `${base}trips`), where('end', '>=', addDays(todayIso(), -400))), put('trips', 'trips'), onError(`${base}trips`)),
+      onSnapshot(collection(db, `${base}notices`), put('notices', 'notices'), onError(`${base}notices`)),
     ];
   }
 
@@ -233,13 +243,66 @@ export function createFamilyData(session) {
     }
   }
 
+  // ---------- own visible name (names/{name} locks, like colors) ----------
+
+  /**
+   * Sets the name everyone sees, or with '' goes back to the Google name.
+   * Returns '' when saved, else a reason ('empty', 'long', 'chars', 'taken', 'failed').
+   */
+  async function setMyName(raw) {
+    const name = cleanDisplayName(raw);
+    const current = me()?.displayName || '';
+    if (name === current) return '';
+    const batch = writeBatch(db);
+    for (const [n, holder] of Object.entries(state.names)) {
+      if (holder === uid && n !== name) batch.delete(doc(db, 'names', n));
+    }
+    if (!name || name === claimName) {
+      // Back to the Google name: no lock needed.
+      batch.set(doc(db, 'people', uid), { ...profileFields(), displayName: deleteField() }, { merge: true });
+    } else {
+      const problem = checkDisplayName(name, { uid, people: state.people, names: state.names });
+      if (problem) return problem;
+      batch.set(doc(db, 'names', name), { uid });
+      batch.set(doc(db, 'people', uid), { ...profileFields(), displayName: name }, { merge: true });
+    }
+    try {
+      await batch.commit();
+      return '';
+    } catch (err) {
+      console.warn('Saving the name failed', err.code);
+      return state.names[name] && state.names[name] !== uid ? 'taken' : 'failed';
+    }
+  }
+
+  // Gives back name locks this person no longer uses, and frees stuck ones of others.
+  let namesBusy = false;
+  const stuckNamesTried = new Set();
+  async function ensureNames() {
+    if (namesBusy || !state.loaded.people || !state.loaded.names) return;
+    if (['people', 'names'].some((k) => !sync[k] || sync[k].pending || sync[k].cache)) return;
+    const plan = planNameWork({ uid, people: state.people, names: state.names });
+    const orphans = plan.orphans.filter((n) => !stuckNamesTried.has(n));
+    if (!plan.release.length && !orphans.length) return;
+    namesBusy = true;
+    try {
+      for (const n of [...plan.release, ...orphans]) {
+        stuckNamesTried.add(n);
+        await deleteDoc(doc(db, 'names', n)).catch((err) => console.warn('Freeing a name failed', n, err.code));
+      }
+    } finally {
+      namesBusy = false;
+    }
+  }
+
   // ---------- start ----------
 
   // Collections the newest security rules are needed for: if the server refuses
   // them, the rules on the server are older than the app (see the Family page).
-  const NEEDS_NEW_RULES = new Set(['colors', 'nicknames', 'households']);
+  const NEEDS_NEW_RULES = new Set(['colors', 'nicknames', 'households', 'names', 'translateSwitch']);
+  const WITH_SYNC = new Set(['people', 'colors', 'names']);
 
-  const watchList = (key, ref, map, after) => onSnapshot(ref, { includeMetadataChanges: key === 'people' || key === 'colors' }, (snap) => {
+  const watchList = (key, ref, map, after) => onSnapshot(ref, { includeMetadataChanges: WITH_SYNC.has(key) }, (snap) => {
     state[key] = map(snap);
     state.loaded[key] = true;
     sync[key] = { pending: snap.metadata.hasPendingWrites, cache: snap.metadata.fromCache };
@@ -258,8 +321,11 @@ export function createFamilyData(session) {
   const stops = [
     ...watchGroup(''),
     watchList('places', collection(db, 'places'), plain),
-    watchList('people', collection(db, 'people'), plain, () => { ensureOwnProfile(); ensureColor(); }),
+    watchList('people', collection(db, 'people'), plain, () => { ensureOwnProfile(); ensureColor(); ensureNames(); }),
     watchList('colors', collection(db, 'colors'), (snap) => Object.fromEntries(snap.docs.map((d) => [d.id, d.data().uid])), ensureColor),
+    watchList('names', collection(db, 'names'), (snap) => Object.fromEntries(snap.docs.map((d) => [d.id, d.data().uid])), ensureNames),
+    watchList('translateSwitch', doc(db, 'config', 'translate'), single),
+    watchList('myAnswer', doc(db, 'days', dayQuestionKey(todayIso()), 'answers', uid), single),
     watchList('nicknames', doc(db, 'nicknames', uid), (snap) => (snap.exists() && snap.data().names) || {}),
     watchList('households', collection(db, 'households'), plain, syncHouseholds),
     watchList('digest', doc(db, 'digest', 'current'), single),
@@ -275,11 +341,16 @@ export function createFamilyData(session) {
     return state.people.find((p) => p.mail === mail) || null;
   }
 
-  /** The name as Google gave it (the part before @ if the person never signed in). */
+  /** The name everyone sees: the one the person chose, else the Google name (else the part before @). */
   function realNameForMail(mail) {
     if (!mail) return '';
-    const p = personByMail(mail);
-    return (p && p.name) || mail.split('@')[0];
+    return visibleName(personByMail(mail) || { mail });
+  }
+
+  /** The name Google gave the person (shown on the Family page, so nobody can hide behind a chosen name). */
+  function googleNameForMail(mail) {
+    const p = mail ? personByMail(mail) : null;
+    return (p && p.name) || '';
   }
 
   /** The name this person sees: their own nickname for someone, else the real name. */
@@ -289,10 +360,12 @@ export function createFamilyData(session) {
     return realNameForMail(mail);
   }
 
-  /** Short form for tight places: the full nickname, or the first name. */
+  /** Short form for tight places: the full nickname or chosen name, or the first Google name. */
   function shortNameForMail(mail) {
     if (!mail) return '';
     if (mail !== session.mail && state.nicknames[mail]) return state.nicknames[mail];
+    const p = personByMail(mail);
+    if (p && p.displayName) return p.displayName;
     return firstName(realNameForMail(mail));
   }
 
@@ -322,6 +395,7 @@ export function createFamilyData(session) {
         return {
           mail, name: nameForMail(mail), realName: realNameForMail(mail), nickname: mail !== session.mail ? state.nicknames[mail] || '' : '',
           uid: p ? p.id : null, photo: p ? p.photo : '', color: colorForMail(mail), colorId: p?.color || '', me: mail === session.mail,
+          googleName: p ? p.name || '' : '', displayName: p ? p.displayName || '' : '',
         };
       })
       .sort((a, b) => (b.me - a.me) || a.name.localeCompare(b.name));
@@ -357,6 +431,10 @@ export function createFamilyData(session) {
     setNickname,
     setMyColor,
     myColor: () => me()?.color || '',
+    setMyName,
+    myDisplayName: () => me()?.displayName || '',
+    myGoogleName: () => claimName,
+    googleNameForMail,
     myHouseholds,
     householdName,
     stop() {

@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { STRINGS } from '../public/js/strings.js';
 import { COLOR_IDS } from '../public/js/colors.js';
+import { QUESTIONS, questionIndex, questionFor } from '../public/js/questions.js';
 
 const LANGS = ['de', 'en', 'fr'];
 const DASHES = /[-‐-―−﹘﹣－]/;
@@ -70,9 +71,12 @@ describe('app text', () => {
       ...['like', 'love', 'laugh', 'wow', 'sad', 'thanks'].map((r) => `chat.react.${r}`),
       ...['morning', 'day', 'evening'].flatMap((k) => [`home.${k}`, `home.${k}Name`]),
       ...COLOR_IDS.map((c) => `color.${c}`),
+      ...['de', 'en', 'fr', 'other'].map((x) => `chat.from.${x}`),
+      ...['empty', 'long', 'chars', 'taken', 'failed'].map((x) => `family.name.${x}`),
+      ...['day', 'stay', 'travel'].flatMap((k) => [`trips.label.${k}`, `trips.example.${k}`]),
     ];
     // Plus every quoted key such as 'weather.clear' or 'settings.digestOn' in the page code.
-    const prefixes = 'cal|tasks|polls|recipes|contacts|weather|rooms|chat|home|settings|day|nav|common|more|form|family|house|color';
+    const prefixes = 'cal|tasks|polls|recipes|contacts|weather|rooms|chat|home|settings|day|nav|common|more|form|family|house|color|board|trips|question|tree|simple';
     const jsDir = new URL('../public/js/', import.meta.url);
     for (const file of readdirSync(jsDir).filter((f) => f.endsWith('.js') && !f.startsWith('strings'))) {
       const src = readFileSync(new URL(file, jsDir), 'utf8');
@@ -81,5 +85,24 @@ describe('app text', () => {
     for (const lang of LANGS) {
       for (const key of built) assert.ok(key in STRINGS[lang], `${lang} is missing ${key}`);
     }
+  });
+
+  it('has 40 questions of the day in three languages, without dashes', () => {
+    assert.equal(QUESTIONS.length, 40);
+    for (const q of QUESTIONS) {
+      for (const lang of LANGS) {
+        assert.ok(q[lang] && q[lang].trim(), `missing ${lang} question`);
+        assert.ok(!DASHES.test(q[lang]), `${lang}: "${q[lang]}"`);
+        assert.ok(q[lang].endsWith('?'), `${lang} question ends without "?": "${q[lang]}"`);
+      }
+      assert.ok(q.fr.endsWith('\u00a0?'), `French needs a no break space before "?": "${q.fr}"`);
+    }
+  });
+
+  it('gives everyone the same question on a day, going round the list', () => {
+    assert.equal(questionIndex('2026-10-23'), questionIndex('2026-10-23'));
+    assert.notEqual(questionIndex('2026-10-23'), questionIndex('2026-10-24'));
+    assert.equal(questionIndex('2026-10-23'), questionIndex('2026-12-02')); // 40 days later
+    assert.equal(questionFor('2026-10-23', 'fr'), QUESTIONS[questionIndex('2026-10-23')].fr);
   });
 });

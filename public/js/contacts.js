@@ -58,6 +58,7 @@ export function createContacts(data) {
       }));
     }
     if (c.note) lines.push(el('span', { class: 'pre contact-note', text: c.note }));
+    if (c.quick) lines.push(el('span', { class: 'muted small', text: t('contacts.quickShown') }));
     const edit = session.isAdmin
       ? el('button', { class: 'btn-link', type: 'button', text: t('common.edit'), onclick: () => openEditor(c) })
       : null;
@@ -95,6 +96,7 @@ export function createContacts(data) {
         { name: 'mail', type: 'text', inputType: 'email', label: t('contacts.mail'), value: c.mail || '', maxlength: 100, inputmode: 'email' },
         { name: 'address', type: 'textarea', label: t('contacts.address'), value: c.address || '', maxlength: 300, rows: 2 },
         { name: 'note', type: 'textarea', label: t('contacts.note'), value: c.note || '', maxlength: 1000, rows: 3, hint: t('contacts.noteHint') },
+        { name: 'quick', type: 'checkbox', label: t('contacts.quick'), value: !!c.quick },
       ],
       danger: existing ? { label: t('common.delete'), onClick: () => remove(existing) } : null,
       onSubmit: async (v) => {
@@ -105,7 +107,7 @@ export function createContacts(data) {
         if (mail && !MAIL_PATTERN.test(mail)) return t('settings.mailInvalid');
         const contact = {
           name: v.name.trim(), group: GROUPS.includes(v.group) ? v.group : 'other', phone, phone2, mail,
-          address: v.address.trim(), note: v.note.trim(), updatedAt: serverTimestamp(), updatedBy: session.mail,
+          address: v.address.trim(), note: v.note.trim(), quick: !!v.quick, updatedAt: serverTimestamp(), updatedBy: session.mail,
         };
         try {
           if (existing) await updateDoc(doc(db, 'contacts', existing.id), contact);

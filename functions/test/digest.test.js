@@ -294,3 +294,16 @@ describe('households', () => {
     assert.deepEqual(result.results.map((r) => r.base), ['']);
   });
 });
+
+describe('visible names in the overview', () => {
+  it('uses the name a person chose, else the first Google name', () => {
+    const week = collectWeek({
+      events: [],
+      tasks: [task({ title: 'Rasen', due: '2026-10-27', assignee: 'ben@example.com' }), task({ title: 'Fenster', due: '2026-10-28', assignee: 'anna@example.com' })],
+      polls: [],
+      people: [{ name: 'Ben Beispiel', mail: 'ben@example.com', displayName: 'Benni' }, { name: 'Anna Muster', mail: 'anna@example.com' }],
+      ...WEEK,
+    });
+    assert.deepEqual(week.tasksDue.map((t) => t.who), ['Benni', 'Anna']);
+  });
+});

@@ -96,7 +96,8 @@ function yearlyBetween(event, from, to) {
  * @returns {{ start, end, calendar, laterBirthdays, tasksDue, otherOpenTasks, openPolls, empty }}
  */
 export function collectWeek({ events = [], tasks = [], polls = [], people = [], start, end }) {
-  const nameByMail = new Map(people.filter((p) => p && p.mail).map((p) => [p.mail, firstName(p.name)]));
+  // The visible name a person chose, else the first name Google gave them.
+  const nameByMail = new Map(people.filter((p) => p && p.mail).map((p) => [p.mail, p.displayName || firstName(p.name)]));
   const calendar = [];
   const laterBirthdays = [];
   const laterEnd = addDays(end, LATER_BIRTHDAY_DAYS);
