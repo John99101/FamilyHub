@@ -31,7 +31,17 @@ settings).
 - **Start** (home): greeting, pinned notices, the weekly overview by Claude,
   the question of the day, the next trip, the next 7 days, upcoming birthdays,
   tasks for you, polls waiting for your vote, your open vouchers, the newest
-  chat messages, the weather.
+  chat messages, the weather. On top a **Today** bar counts what waits for
+  you (dates today, tasks, unread rooms, polls, vouchers); a tap opens the
+  page. Each card folds shut with its arrow (kept on this device). On wide
+  screens the cards stand in two or three columns.
+- **Finding pages**: on a computer (1024 pixels wide and more) a sidebar
+  lists every page, and the chat shows its rooms in a column beside the
+  conversation. On phones the tabs stay at the bottom; the **Mehr** page has
+  a search box (case and accents do not matter, Enter opens the first page
+  found) and a pin on each page to keep it on top (kept on this device). On
+  touch screens buttons are at least 44 pixels high. Simple mode keeps its
+  own layout.
 - **Family chat**: the main room "Familie" plus rooms anyone can open, for
   everyone or only for chosen people. Text up to 2000 characters, replies,
   reactions, live updates, older messages in pages of 50, "new" markers.
@@ -413,10 +423,13 @@ public/                 the website (served by Firebase Hosting)
   css/house.css         styles for colors, nicknames, households and calendar lines
   css/more.css          styles for translations, notice board, trips, question, tree, simple mode
   css/groups.css        styles for mail sign in, the group list, the wizard and the look editor
+  css/layout.css        sidebar and chat columns on wide screens, Today bar, folding cards, More search and pins, tap sizes
   js/firebase-config.js web config of your project (not secret) and the App Check key
   js/firebase.js        loads the pinned Firebase SDK, emulators on localhost, puts paths under the active group
   js/scope.js           the active group of this device and which paths belong to it (tested in Node)
   js/app.js             sign in, opening a group, navigation, starts the pages
+  js/nav.js             fills the sidebar, search and pins on the Mehr page
+  js/find.js            page search and pin list helpers (tested in Node)
   js/start.js           mail sign in and register, mail check, group list, join, the five step wizard
   js/group-page.js      Gruppe page (code, password, pages, look, members, leave, delete)
   js/group-forms.js     the editors used by the wizard and the Gruppe page
@@ -448,7 +461,7 @@ public/                 the website (served by Firebase Hosting)
   js/risk-page.js       Risiko page (risk figures and AI summary)
   js/market-data.js     live copies of the market documents
   js/settings.js        settings
-  js/strings.js         app text in German, English and French (plus strings-family.js, strings-house.js, strings-more.js, strings-groups.js)
+  js/strings.js         app text in German, English and French (plus strings-family.js, strings-house.js, strings-more.js, strings-groups.js, strings-vouchers.js, strings-nav.js)
   js/i18n.js            picks the language, fills the page text
   js/ui.js              small helpers (safe text, dates in the chosen language, cards)
   js/theme-boot.js      applies light or dark before the page is drawn

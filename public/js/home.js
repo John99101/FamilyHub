@@ -3,7 +3,7 @@
 // that wait to be redeemed, the newest chat
 // messages and the weather. In simple mode: big text, today and tomorrow,
 // big call buttons, the newest messages.
-import { $, el, card, emptyNote, formatWeekdayDay, formatDayMonth, formatTime, relativeDays } from './ui.js';
+import { $, el, svgIcon, card, emptyNote, formatWeekdayDay, formatDayMonth, formatTime, relativeDays } from './ui.js';
 import { t, lang } from './i18n.js';
 import { todayIso, addDays, daysBetween, upcoming } from './dates.js';
 import { firstName, myName, toDate } from './family-data.js';
@@ -20,9 +20,10 @@ import { tripStatus, tripRange } from './trips.js';
 import { questionFor } from './questions.js';
 import { telHref } from './contacts.js';
 import { isSimpleMode, setSimpleMode } from './simple.js';
-import { featureOn, homeCards } from './design.js';
+import { featureOn, homeCards, HOME_CARDS } from './design.js';
 
 const NEXT_DAYS = 7;
+const FOLD_KEY = 'familyhub-folded'; // start cards folded shut on this device
 const BIRTHDAY_DAYS = 30;
 
 function greeting(name) {
@@ -44,6 +45,63 @@ export function createHome(data, pages) {
   const session = data.session;
   let visible = false;
   const on = (card) => !CARD_FEATURE[card] || featureOn(session.group, CARD_FEATURE[card]);
+
+  // ---------- what waits for this person (the Today bar and the cards share these) ----------
+
+  function myTasks() {
+    const soon = addDays(todayIso(), NEXT_DAYS - 1);
+    return sortOpenTasks(data.state.tasksOpen).filter((x) => x.assignee === session.mail || (!x.assignee && x.due && x.due <= soon));
+  }
+  const waitingPolls = () => data.state.polls.filter((p) => !p.closed && !myVote(p, session.user.uid).length);
+
+  /** Numbers for today that lead straight to their page; a calm line when nothing waits. */
+  function todayBar() {
+    const today = todayIso();
+    const chips = [];
+    const chip = (card, n, label, href, onclick) => {
+      if (!on(card) || n < 1) return;
+      chips.push(el('a', { class: 'today-chip', href, onclick }, [
+        el('span', { class: 'today-num', text: String(n) }), el('span', { text: label }),
+      ]));
+    };
+    chip('days', upcoming([...data.state.events, ...data.state.yearly], today, today).length, t('today.events'), '#/kalender', () => pages.calendar.showDay(today));
+    chip('tasks', myTasks().length, t('today.tasks'), '#/aufgaben');
+    chip('chat', data.state.rooms.filter((r) => pages.chat.isUnread(r)).length, t('today.unread'), '#/chat');
+    chip('polls', waitingPolls().length, t('today.polls'), '#/umfragen');
+    chip('vouchers', myOpenVouchers(data.state.vouchers, session.mail, today).length, t('today.vouchers'), '#/gutscheine');
+    return chips.length
+      ? el('nav', { class: 'today-bar', 'aria-label': t('today.label') }, chips)
+      : el('p', { class: 'today-calm', text: t('today.calm') });
+  }
+
+  // ---------- cards that fold shut (remembered on this device) ----------
+
+  let folded = new Set();
+  try {
+    const saved = JSON.parse(localStorage.getItem(FOLD_KEY) || '[]');
+    folded = new Set(Array.isArray(saved) ? saved.filter((c) => HOME_CARDS.includes(c)) : []);
+  } catch { /* storage blocked or broken: all open */ }
+
+  function toggleFold(key) {
+    if (folded.has(key)) folded.delete(key);
+    else folded.add(key);
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify([...folded])); } catch { /* storage blocked */ }
+    render();
+  }
+
+  function foldable(node, key) {
+    const head = node.querySelector(':scope > .card-head');
+    if (!head) return node;
+    const shut = folded.has(key);
+    node.classList.add('foldable');
+    node.classList.toggle('folded', shut);
+    const title = head.querySelector('h2')?.textContent || '';
+    head.append(el('button', {
+      class: 'fold-btn', type: 'button', 'aria-expanded': shut ? 'false' : 'true',
+      'aria-label': t(shut ? 'home.unfold' : 'home.fold', { card: title }), onclick: () => toggleFold(key),
+    }, [svgIcon(['m6 9 6 6 6-6'])]));
+    return node;
+  }
 
   function hello(name) {
     const welcome = session.group?.design?.welcome;
@@ -117,10 +175,8 @@ export function createHome(data, pages) {
   }
 
   function tasksCard() {
-    const today = todayIso();
-    const open = sortOpenTasks(data.state.tasksOpen);
-    const soon = addDays(today, NEXT_DAYS - 1);
-    const mine = open.filter((x) => x.assignee === session.mail || (!x.assignee && x.due && x.due <= soon));
+    const open = data.state.tasksOpen;
+    const mine = myTasks();
     const action = link('#/aufgaben', t('home.toTasks'));
     if (!open.length) return card(t('home.tasks'), emptyNote(data.state.loaded.tasksOpen ? t('home.noTasks') : t('common.loading')), { action });
     const shown = mine.slice(0, 6);
@@ -133,7 +189,7 @@ export function createHome(data, pages) {
   }
 
   function pollsCard() {
-    const waiting = data.state.polls.filter((p) => !p.closed && !myVote(p, session.user.uid).length);
+    const waiting = waitingPolls();
     if (!waiting.length) return null;
     return card(t('home.polls'), el('ul', { class: 'simple-list' }, waiting.slice(0, 4).map((p) => el('li', {}, [
       el('a', { class: 'simple-main link-plain', href: '#/umfragen', text: p.question }),
@@ -268,8 +324,10 @@ export function createHome(data, pages) {
       tasks: tasksCard, question: questionCard, polls: pollsCard, vouchers: vouchersCard, chat: chatCard, weather: weatherCard,
     };
     // The cards the group chose, in its order, for the pages it uses.
-    const cards = homeCards(session.group?.design).filter(on).flatMap((c) => build[c]());
-    root.replaceChildren(hello(name), ...cards.filter(Boolean));
+    const cards = homeCards(session.group?.design).filter(on)
+      .flatMap((c) => [].concat(build[c]()).filter(Boolean).map((node) => foldable(node, c)));
+    // On wide screens the cards flow into columns; on phones they stay one list.
+    root.replaceChildren(hello(name), todayBar(), el('div', { class: 'home-grid' }, cards));
   }
 
   const stopData = data.subscribe(() => { if (visible) render(); });

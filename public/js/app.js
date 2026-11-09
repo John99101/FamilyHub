@@ -30,11 +30,15 @@ import { createVoucherPage } from './voucher-page.js';
 import { createQuestionPage } from './question-page.js';
 import { createTree } from './tree.js';
 import { isSimpleMode, SIMPLE_ROUTES } from './simple.js';
+import { buildSidebar, setupMorePage } from './nav.js';
 
-export const APP_VERSION = '1.6.0';
+export const APP_VERSION = '1.7.0';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();
+// The sidebar copies the translated page names; the More page gets search and pins.
+buildSidebar();
+const morePage = setupMorePage();
 
 // The look of the group used last on this device, until the group itself is read.
 applyDesign(storedDesign(), { keep: false });
@@ -256,11 +260,14 @@ function routeOn(name) {
 /** Shows the group's name, and only the tabs and tiles of its pages. */
 function showGroupFrame() {
   session.markets = featureOn(session.group, 'markets') && session.marketUser;
-  $('app-name').textContent = `${session.group.icon || ''} ${session.group.name || ''}`.trim();
-  for (const link of document.querySelectorAll('.tab[data-route], .tile[href^="#/"]')) {
+  const groupName = `${session.group.icon || ''} ${session.group.name || ''}`.trim();
+  $('app-name').textContent = groupName;
+  $('side-group').textContent = groupName;
+  for (const link of document.querySelectorAll('.tab[data-route], .tile[href^="#/"], .side-link')) {
     const name = link.dataset.route || link.getAttribute('href').slice(2);
-    link.hidden = !routeOn(name);
+    (link.closest('.tile-wrap') || link).hidden = !routeOn(name);
   }
+  morePage.refresh();
 }
 
 function groupChanged() {
@@ -315,8 +322,9 @@ function route() {
   if (!routeOn(name)) name = 'start';
   const r = ROUTES[name];
   for (const [key, other] of Object.entries(ROUTES)) $(other.view).hidden = key !== name;
-  for (const tab of document.querySelectorAll('.tab')) {
-    if (tab.dataset.route === r.tab) tab.setAttribute('aria-current', 'page');
+  for (const tab of document.querySelectorAll('.tab, .side-link')) {
+    const current = tab.classList.contains('side-link') ? name : r.tab;
+    if (tab.dataset.route === current) tab.setAttribute('aria-current', 'page');
     else tab.removeAttribute('aria-current');
   }
   $('back-link').hidden = !r.back;

@@ -1,0 +1,132 @@
+/* FamilyHub layout: the sidebar and chat columns on wide screens, the start
+   page's Today bar, card columns and folding cards, the More page's search
+   and pins, and bigger tap targets on touch screens. Simple mode keeps its
+   own big, plain layout. */
+
+/* ---------- Today bar (start page) ---------- */
+
+.today-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.today-chip {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 14px 0 6px;
+  border-radius: 999px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow);
+  color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px;
+}
+.today-chip:hover { border-color: var(--primary); }
+.today-num {
+  min-width: 32px; height: 32px; padding: 0 8px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary); color: var(--on-primary); font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.today-calm { margin: 0 0 16px; color: var(--muted); }
+/* Phones: two chips per row, so the cards start higher up. */
+@media (max-width: 559px) {
+  .today-bar { display: grid; grid-template-columns: 1fr 1fr; }
+  .today-chip { border-radius: 16px; padding: 6px 10px 6px 6px; font-size: 13px; line-height: 1.25; }
+}
+
+/* ---------- start cards that fold shut ---------- */
+
+.foldable > .card-head h2 { flex: 1; min-width: 0; }
+.fold-btn {
+  flex: 0 0 auto; width: 36px; height: 36px; margin: -4px -6px -4px 0; border: 0; border-radius: 50%;
+  background: none; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
+}
+.fold-btn:hover { background: var(--surface-2); color: var(--text); }
+.fold-btn svg { width: 20px; height: 20px; transition: transform .2s; }
+.folded .fold-btn svg { transform: rotate(-90deg); }
+.card.folded > :not(.card-head) { display: none; }
+.card.folded > .card-head { margin-bottom: 0; }
+@media (prefers-reduced-motion: reduce) { .fold-btn svg { transition: none; } }
+
+/* ---------- More page: search and pinned pages ---------- */
+
+.more-search-row { margin-bottom: 12px; }
+.more-search {
+  width: 100%; min-height: 44px; padding: 0 16px; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--surface);
+}
+.more-search:focus { outline: none; border-color: var(--primary); }
+.tile-wrap { position: relative; display: flex; min-width: 0; }
+.tile-wrap > .tile { flex: 1; }
+.tile-wrap.pinned > .tile { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.pin-btn {
+  position: absolute; top: 6px; right: 6px; width: 40px; height: 40px; border: 0; border-radius: 50%;
+  background: none; color: var(--muted); display: inline-flex; align-items: center; justify-content: center;
+}
+.pin-btn:hover { background: var(--surface-2); color: var(--text); }
+.pin-btn svg { width: 18px; height: 18px; }
+.pin-btn[aria-pressed="true"] { color: var(--accent); }
+.pin-btn[aria-pressed="true"] svg { fill: currentColor; }
+.search-miss { display: none !important; }
+
+/* ---------- sidebar (filled by nav.js, shown on wide screens) ---------- */
+
+.sidebar { display: none; }
+.side-group { margin: 4px 10px 14px; font-weight: 700; font-size: 16px; overflow-wrap: anywhere; }
+.side-list { display: flex; flex-direction: column; gap: 2px; }
+.side-bottom { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
+.side-link {
+  display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 10px; border-radius: 10px;
+  color: var(--muted); text-decoration: none; font-weight: 600; font-size: 15px;
+}
+.side-link:hover { background: var(--surface-2); color: var(--text); }
+.side-link[aria-current="page"] { background: color-mix(in srgb, var(--primary) 14%, var(--surface)); color: var(--primary); }
+.side-link svg { width: 20px; height: 20px; flex: 0 0 auto; }
+.side-link .tab-icon { flex: 0 0 auto; }
+
+@media (min-width: 1024px) {
+  :root:not(.simple) .app { grid-template-columns: 232px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  :root:not(.simple) .sidebar {
+    display: flex; flex-direction: column; grid-column: 1; grid-row: 1 / 3; min-height: 0; overflow-y: auto;
+    padding: calc(12px + env(safe-area-inset-top)) 10px 12px;
+    background: var(--surface); border-right: 1px solid var(--border);
+  }
+  :root:not(.simple) .topbar { grid-column: 2; grid-row: 1; }
+  :root:not(.simple) .main { grid-column: 2; grid-row: 2; }
+  /* Every page is in the sidebar: no tab bar, back link or group name in the top bar. */
+  :root:not(.simple) .tabbar,
+  :root:not(.simple) .back-link,
+  :root:not(.simple) .topbar .app-name { display: none; }
+
+  /* Chat: rooms in a column beside the conversation. */
+  :root:not(.simple) .view-chat {
+    display: grid; grid-template-columns: 250px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto;
+  }
+  :root:not(.simple) .room-bar {
+    grid-column: 1; grid-row: 1 / 4; min-height: 0; overflow-y: auto;
+    flex-direction: column; align-items: stretch; gap: 8px; padding: 12px 10px;
+    border-bottom: 0; border-right: 1px solid var(--border);
+  }
+  :root:not(.simple) .room-list { flex: 0 1 auto; flex-direction: column; gap: 2px; overflow: visible; }
+  :root:not(.simple) .room-chip {
+    justify-content: flex-start; min-height: 40px; padding: 0 12px; border-radius: 10px;
+    background: none; white-space: normal; text-align: left;
+  }
+  :root:not(.simple) .room-add { width: 40px; padding: 0; justify-content: center; }
+  :root:not(.simple) .room-chip:hover { background: var(--surface-2); color: var(--text); }
+  :root:not(.simple) .room-chip[aria-pressed="true"] { background: var(--primary); color: var(--on-primary); }
+  :root:not(.simple) .room-bar > button { align-self: flex-start; }
+  :root:not(.simple) .chat-scroll { grid-column: 2; grid-row: 1; }
+  :root:not(.simple) .chat-notice { grid-column: 2; grid-row: 2; }
+  :root:not(.simple) .composer { grid-column: 2; grid-row: 3; }
+  :root:not(.simple) .new-pill { left: calc(50% + 125px); }
+}
+
+/* Start page cards in columns when there is room. */
+@media (min-width: 1100px) {
+  :root:not(.simple) #home-content { max-width: 1180px; }
+  :root:not(.simple) .home-grid { columns: 2 340px; column-gap: 16px; }
+  :root:not(.simple) .home-grid > .card { break-inside: avoid; }
+}
+@media (min-width: 1560px) {
+  :root:not(.simple) #home-content { max-width: 1500px; }
+  :root:not(.simple) .home-grid { columns: 3 340px; }
+}
+
+/* ---------- touch screens: every tap target at least 44 px ---------- */
+
+@media (pointer: coarse) {
+  .btn-link, .btn-small, .room-chip { min-height: 44px; }
+  .fold-btn { width: 44px; height: 44px; }
+  .room-add { width: 44px; }
+}

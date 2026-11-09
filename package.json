@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "npm run test:strings && npm run test:functions && npm run test:rules",
-    "test:strings": "node --test tests/strings.test.js tests/dates.test.js tests/colors.test.js tests/names.test.js tests/tree-layout.test.js tests/scope.test.js tests/design.test.js tests/vouchers.test.js",
+    "test:strings": "node --test tests/strings.test.js tests/dates.test.js tests/colors.test.js tests/names.test.js tests/tree-layout.test.js tests/scope.test.js tests/design.test.js tests/vouchers.test.js tests/find.test.js",
     "test:functions": "npm --prefix functions test",
     "test:rules": "firebase emulators:exec --only firestore --project demo-familyhub \"node --test --test-concurrency=1 tests/rules.test.js tests/rules-family.test.js tests/rules-households.test.js tests/rules-extra.test.js tests/rules-groups.test.js tests/rules-vouchers.test.js\"",
     "emulators": "firebase emulators:exec --only auth,firestore,functions --project demo-familyhub --ui \"node scripts/serve-local.mjs\"",

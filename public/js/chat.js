@@ -122,7 +122,7 @@ export function createChat(session, data) {
       el('span', { text: r.id === MAIN_ROOM ? t('rooms.main') : r.name }),
     ])));
     const anyUnread = rooms.some((r) => isUnread(r) && !(visible && r.id === roomId));
-    $('chat-dot').hidden = !anyUnread;
+    for (const dot of document.querySelectorAll('.chat-dot')) dot.hidden = !anyUnread;
     roomList.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
@@ -792,7 +792,7 @@ export function createChat(session, data) {
       setReply(null);
       input.value = '';
       counter.hidden = true;
-      $('chat-dot').hidden = true;
+      for (const dot of document.querySelectorAll('.chat-dot')) dot.hidden = true;
       messages.clear();
       nodeCache.clear();
       stopTranslations();
