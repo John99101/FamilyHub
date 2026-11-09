@@ -4,6 +4,7 @@
 import { db, doc, updateDoc, deleteDoc, serverTimestamp, callFunction } from './firebase.js';
 import { $, el, card, toast } from './ui.js';
 import { t, locale } from './i18n.js';
+import { groupErrorKey } from './group-errors.js';
 import { openDialog } from './dialog.js';
 import { applyDesign } from './design.js';
 import { nameAndIcon, passwordFields, passwordProblem, featureSwitches, designEditor, cleanDesign } from './group-forms.js';
@@ -56,7 +57,7 @@ export function createGroupPage(session, { onSwitch }) {
           close();
         } catch (err) {
           console.warn('Changing the password failed', err.code);
-          toast(t('common.saveFailed'));
+          toast(t(groupErrorKey(err, 'common.saveFailed')));
         }
       } }],
     });

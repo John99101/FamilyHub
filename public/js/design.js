@@ -6,7 +6,8 @@
 export const FEATURES = ['chat', 'calendar', 'tasks', 'polls', 'trips', 'vouchers', 'board', 'tree', 'question',
   'recipes', 'contacts', 'weather', 'markets'];
 export const HOME_CARDS = ['notices', 'digest', 'days', 'birthdays', 'trips', 'tasks', 'question', 'polls', 'vouchers', 'chat', 'weather'];
-export const THEMES = ['calm', 'warm', 'forest', 'ocean', 'playful', 'night'];
+export const THEMES = ['calm', 'warm', 'forest', 'ocean', 'playful', 'night',
+  'sunset', 'berry', 'mint', 'sand', 'slate', 'lavender', 'sky', 'autumn'];
 export const PATTERNS = ['none', 'dots', 'grid', 'waves', 'hearts', 'stars', 'leaves', 'flowers',
   'mountains', 'bubbles', 'confetti', 'stripes', 'houses'];
 export const FONTS = ['clean', 'round', 'classic', 'hand'];
@@ -22,6 +23,14 @@ const PRESETS = {
   ocean: { l: ['#1d4ed8', '#0891b2', '#f1f6fb'], d: ['#7aa7ff', '#22d3ee', '#0b1220'] },
   playful: { l: ['#7c3aed', '#ea580c', '#faf5ff'], d: ['#c4a5ff', '#fb923c', '#140f1c'] },
   night: { l: ['#4338ca', '#9333ea', '#eef0f7'], d: ['#a5b4fc', '#c084fc', '#0a0b14'] },
+  sunset: { l: ['#c2410c', '#be185d', '#fff7ed'], d: ['#fb923c', '#f472b6', '#170f0b'] },
+  berry: { l: ['#be185d', '#7c3aed', '#fdf2f8'], d: ['#f472b6', '#c4a5ff', '#170d13'] },
+  mint: { l: ['#047857', '#0891b2', '#effcf7'], d: ['#34d399', '#22d3ee', '#0b1412'] },
+  sand: { l: ['#92400e', '#0f766e', '#faf6ee'], d: ['#e0b04a', '#2cc5b4', '#15120c'] },
+  slate: { l: ['#334155', '#0284c7', '#f1f5f9'], d: ['#cbd5e1', '#38bdf8', '#0c1014'] },
+  lavender: { l: ['#6d28d9', '#0d9488', '#f5f3ff'], d: ['#b9a6ff', '#2dd4bf', '#100e1a'] },
+  sky: { l: ['#0369a1', '#ea580c', '#f0f9ff'], d: ['#7dd3fc', '#fb923c', '#0a1118'] },
+  autumn: { l: ['#9a3412', '#a16207', '#fdf6ec'], d: ['#f0884a', '#e0b04a', '#16100b'] },
 };
 
 // Text and card colors stay as in app.css; they decide what "readable" means.

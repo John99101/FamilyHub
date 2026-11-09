@@ -101,7 +101,8 @@ service cloud.firestore {
       return d is map
         && d.keys().hasOnly(['theme', 'main', 'accent', 'background', 'pattern', 'patternStrength',
           'font', 'corners', 'spacing', 'cards', 'welcome'])
-        && d.get('theme', 'calm') in ['calm', 'warm', 'forest', 'ocean', 'playful', 'night']
+        && d.get('theme', 'calm') in ['calm', 'warm', 'forest', 'ocean', 'playful', 'night',
+          'sunset', 'berry', 'mint', 'sand', 'slate', 'lavender', 'sky', 'autumn']
         && colorOrEmpty(d.get('main', ''))
         && colorOrEmpty(d.get('accent', ''))
         && colorOrEmpty(d.get('background', ''))

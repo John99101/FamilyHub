@@ -315,7 +315,12 @@ first time an admin opens the chat, the main room is created automatically.
 ## 6. App Check with reCAPTCHA Enterprise (test first, enforce later)
 
 App Check makes Firestore accept requests only from your real website. The
-code is ready; it stays off until you paste a site key.
+code is ready; it stays off until you paste a site key. Starting a group,
+joining one and changing a group password need it on the live site at once:
+those three functions refuse every device App Check has not confirmed. So do
+"Create the key", "Register it in Firebase" and "Turn it on in the website"
+before anyone starts or joins a group; only the last part (**Enforce** for
+Firestore) can wait.
 
 **Create the key**
 
@@ -453,6 +458,26 @@ To check: Firebase console → **Firestore Database** → tab **Rules**: the tex
 must contain `match /colors/{color}` and `match /translations/{id}`. Colors
 and names that got stuck earlier are freed automatically the next time
 anyone opens the app.
+
+**If starting or joining a group fails**
+
+From version 1.8.0 the message says why:
+
+- **"Die Sicherheitsprüfung (App Check) hat dieses Gerät nicht bestätigt"**:
+  the three group functions answer only devices that App Check has
+  confirmed, from the first day (Firestore itself is enforced later). Finish
+  step 6 completely: key created with both domains, registered under
+  **App Check** → **Apps**, key ID in `public/js/firebase-config.js`,
+  website deployed. To check: Firebase console → **App Check** → tab
+  **Apps**: your web app shows **reCAPTCHA Enterprise** as registered.
+- **"Der Server für Gruppen ist nicht erreichbar oder noch nicht
+  eingerichtet"**: the functions are missing. Firebase console →
+  **Functions** must list `createGroupCall`, `joinGroupCall` and
+  `setGroupPasswordCall`; if not, run `firebase deploy --only functions`.
+- **"Deine Anmeldung gilt nicht mehr ..."**: sign out and in again; with a
+  mail account, confirm the mail first.
+- Any other message: Firebase console → **Functions** → `createGroupCall` →
+  **Logs** shows the reason.
 
 **Chat translations**
 

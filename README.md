@@ -21,8 +21,9 @@ settings).
   picture, a new password, pages on or off, the look, members (make admin,
   remove). Everyone can switch group or leave (an admin only after losing the
   admin role); admins can delete the group with everything in it.
-- **Look of a group** (admins, see it live while choosing): six styles (Ruhig,
-  Warm, Wald, Meer, Verspielt, Nacht), each light and dark; own main, accent
+- **Look of a group** (admins, see it live while choosing): 14 styles (Ruhig,
+  Warm, Wald, Meer, Verspielt, Nacht, Abendrot, Beere, Minze, Sand, Schiefer,
+  Lavendel, Himmel, Herbst), each light and dark; own main, accent
   and background colors (changed automatically if they would be hard to
   read); 12 built in background pictures with a strength slider; four fonts
   (clear, round, classic, handwritten headings); round or square corners;
@@ -430,6 +431,7 @@ public/                 the website (served by Firebase Hosting)
   js/app.js             sign in, opening a group, navigation, starts the pages
   js/nav.js             fills the sidebar, search and pins on the Mehr page
   js/find.js            page search and pin list helpers (tested in Node)
+  js/group-errors.js    says why starting or joining a group failed (tested in Node)
   js/start.js           mail sign in and register, mail check, group list, join, the five step wizard
   js/group-page.js      Gruppe page (code, password, pages, look, members, leave, delete)
   js/group-forms.js     the editors used by the wizard and the Gruppe page

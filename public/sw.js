@@ -2,7 +2,7 @@
 // It only keeps the page files (HTML, CSS, JS, icons) so the app opens
 // quickly and can be installed. Chat messages, market data and anything from
 // Google or other servers are never touched or stored here.
-const VERSION = '1.7.0';
+const VERSION = '1.8.0';
 const CACHE = `familyhub-page-${VERSION}`;
 const PAGE_FILES = [
   '/',
@@ -39,6 +39,7 @@ const PAGE_FILES = [
   '/js/strings-nav.js',
   '/js/nav.js',
   '/js/find.js',
+  '/js/group-errors.js',
   '/js/voucher-page.js',
   '/js/recipes.js',
   '/js/contacts.js',

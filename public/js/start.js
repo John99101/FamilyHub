@@ -8,6 +8,7 @@ import {
 import { $, el, toast } from './ui.js';
 import { t } from './i18n.js';
 import { applyDesign, storedDesign, FEATURES } from './design.js';
+import { groupErrorKey } from './group-errors.js';
 import {
   nameAndIcon, passwordFields, passwordProblem, featureSwitches, designEditor, cleanDesign,
 } from './group-forms.js';
@@ -155,8 +156,7 @@ export async function showGroups(session, { onOpen, onSignOut }) {
       onOpen(groupId);
     } catch (err) {
       console.warn('Joining failed', err.code);
-      error.textContent = t(err.code === 'functions/permission-denied' ? 'start.err.wrongCode'
-        : err.code === 'functions/resource-exhausted' ? 'start.err.locked' : 'start.err.failed');
+      error.textContent = t(groupErrorKey(err));
     } finally {
       join.disabled = false;
     }
@@ -239,7 +239,7 @@ function showWizard(session, { onOpen, onBack }) {
       showCreated(groupId, code);
     } catch (err) {
       console.warn('Setting up the group failed', err.code, err.message);
-      error.textContent = t(err.message === 'too-many-groups' ? 'start.err.tooManyGroups' : 'start.err.failed');
+      error.textContent = t(groupErrorKey(err));
     } finally {
       busy = false;
     }
