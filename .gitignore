@@ -37,3 +37,8 @@ desktop.ini
 # Editors
 .vscode/
 .idea/
+
+# Claude Code kit
+.claude/settings.local.json
+CLAUDE.local.md
+!.env.example

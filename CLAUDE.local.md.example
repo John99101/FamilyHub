@@ -1,0 +1,7 @@
+# Personal notes for this project (not committed)
+
+<!-- Copy to CLAUDE.local.md. It's git-ignored and only affects your own sessions. -->
+
+- My local dev URL: http://localhost:3000
+- I run the database with: `docker compose up db`
+- Prefer explaining changes in more detail for files under `src/legacy/`.

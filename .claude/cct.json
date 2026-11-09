@@ -1,0 +1,7 @@
+{
+  "guard_level": "standard",
+  "format_on_edit": true,
+  "lint_on_edit": true,
+  "protect_lockfiles": true,
+  "setup_reminder": true
+}

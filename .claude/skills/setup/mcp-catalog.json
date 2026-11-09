@@ -1,0 +1,72 @@
+{
+  "_about": "MCP servers the setup skill can add to .mcp.json. Copy an entry's 'config' under mcpServers.<name>. Values in ${...} come from the user's environment; never write real tokens. Check the vendor docs for current URLs and packages before adding.",
+  "servers": {
+    "github": {
+      "for": "Issues, pull requests, code search, Actions",
+      "env": ["GITHUB_PERSONAL_ACCESS_TOKEN"],
+      "docs": "https://github.com/github/github-mcp-server",
+      "config": {
+        "type": "http",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "headers": { "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN}" }
+      }
+    },
+    "atlassian": {
+      "for": "Jira issues and Confluence pages",
+      "env": [],
+      "auth": "OAuth: run /mcp in Claude Code and log in",
+      "docs": "https://support.atlassian.com/atlassian-rovo-mcp-server/",
+      "config": {
+        "type": "sse",
+        "url": "https://mcp.atlassian.com/v1/sse"
+      }
+    },
+    "slack": {
+      "for": "Search, read and post Slack messages (official Slack-hosted server)",
+      "env": [],
+      "auth": "OAuth: run /mcp in Claude Code and log in. Alternative: /plugin install slack@claude-plugins-official",
+      "docs": "https://docs.slack.dev/ai/slack-mcp-server/connect-to-harnesses",
+      "config": {
+        "type": "http",
+        "url": "https://mcp.slack.com/mcp"
+      }
+    },
+    "postgres": {
+      "for": "Query a PostgreSQL database; restricted mode is read-only",
+      "env": ["DATABASE_URI"],
+      "docs": "https://github.com/crystaldba/postgres-mcp",
+      "config": {
+        "command": "uvx",
+        "args": ["postgres-mcp", "--access-mode=restricted"],
+        "env": { "DATABASE_URI": "${DATABASE_URI}" }
+      }
+    },
+    "sqlite": {
+      "for": "Query a local SQLite database file",
+      "env": ["SQLITE_DB_PATH"],
+      "docs": "https://github.com/modelcontextprotocol/servers",
+      "config": {
+        "command": "uvx",
+        "args": ["mcp-server-sqlite", "--db-path", "${SQLITE_DB_PATH}"]
+      }
+    },
+    "playwright": {
+      "for": "Drive a browser to test web UIs",
+      "env": [],
+      "docs": "https://github.com/microsoft/playwright-mcp",
+      "config": {
+        "command": "npx",
+        "args": ["-y", "@playwright/mcp@latest"]
+      }
+    },
+    "context7": {
+      "for": "Up-to-date library documentation",
+      "env": [],
+      "docs": "https://github.com/upstash/context7",
+      "config": {
+        "type": "http",
+        "url": "https://mcp.context7.com/mcp"
+      }
+    }
+  }
+}
