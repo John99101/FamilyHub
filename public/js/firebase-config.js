@@ -18,4 +18,4 @@ export const firebaseConfig = {
 
 // App Check with reCAPTCHA Enterprise (SETUP.md, step 6).
 // Leave empty until you have created the key; App Check then stays off.
-export const recaptchaEnterpriseSiteKey = '6LdbwvwtAAAAAIvVZprsl9fSkq_jrz61caOR0eDa';
+export const recaptchaEnterpriseSiteKey = '6LfBrhguAAAAAPDU9AWmPN1UaB2UurQ19zjr0c69';
