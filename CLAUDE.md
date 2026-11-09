@@ -7,7 +7,7 @@ A private website and installable app for families and other groups (about 5 to 
 - Languages: JavaScript (ES modules, no build step, no TypeScript), Firestore security rules
 - Frameworks: none in the browser (plain HTML, CSS, JS; Firebase JS SDK 13.1.0 pinned from gstatic); Cloud Functions v2 (firebase-functions 7.4.0, Node.js 22) with the Anthropic SDK
 - Package manager: npm (root and `functions/` each have their own `package.json`)
-- Data and services: Firebase Hosting, Auth (Google), Firestore (europe-west3), Cloud Functions, Secret Manager, App Check; NGN Market API; Anthropic API (Claude Opus 5.5); Open-Meteo from the browser
+- Data and services: Firebase Hosting, Auth (Google, mail and password), Firestore (europe-west3), Cloud Functions, Secret Manager, App Check; NGN Market API; Anthropic API (Claude Opus 5.5); Open-Meteo from the browser
 
 ## Commands
 

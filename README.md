@@ -1,5 +1,7 @@
 # FamilyHub
 
+[![Tests](https://github.com/John99101/FamilyHub/actions/workflows/test.yml/badge.svg)](https://github.com/John99101/FamilyHub/actions/workflows/test.yml)
+
 A small private website for families and other groups (about 5 to 15 people
 each), usable on computers and phones and installable as an app. The app is
 in German, English and French (it follows the browser; changeable in the
