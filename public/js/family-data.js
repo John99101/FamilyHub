@@ -14,6 +14,7 @@ import { todayIso, addDays } from './dates.js';
 import { hexOf, NEUTRAL, planColorWork } from './colors.js';
 import { visibleName, checkDisplayName, cleanDisplayName, planNameWork } from './names.js';
 import { dayQuestionKey } from './questions.js';
+import { mergeVouchers } from './vouchers.js';
 
 export const MAIN_ROOM = 'familie';
 // Multi day entries may start up to this many days before the day shown.
@@ -36,6 +37,7 @@ export function createFamilyData(session) {
     polls: [],       // the 30 newest (per group)
     trips: [],       // trips of the family and of this person's households
     notices: [],     // notice board
+    vouchers: [],    // gifts of time: shared ones and private ones this person gives or gets
     places: [],
     names: {},       // visible name → uid of the person using it
     translateSwitch: null,
@@ -295,6 +297,18 @@ export function createFamilyData(session) {
     }
   }
 
+  // ---------- gifts of time ----------
+
+  // Private gifts may only be read by their givers and receivers, so the rules
+  // need three lists: the shared ones, the ones given and the ones received.
+  const voucherParts = {};
+  const watchVouchers = (part, ref) => onSnapshot(ref, (snap) => {
+    voucherParts[part] = rowsOf(snap, '', 'vouchers');
+    state.vouchers = mergeVouchers(...Object.values(voucherParts));
+    if (Object.keys(voucherParts).length === 3) state.loaded.vouchers = true;
+    notify();
+  }, onError(`vouchers (${part})`));
+
   // ---------- start ----------
 
   // Collections the newest security rules are needed for: if the server refuses
@@ -330,6 +344,9 @@ export function createFamilyData(session) {
     watchList('households', collection(db, 'households'), plain, syncHouseholds),
     watchList('digest', doc(db, 'digest', 'current'), single),
     watchList('digestSwitch', doc(db, 'config', 'digest'), single),
+    watchVouchers('shared', query(collection(db, 'vouchers'), where('private', '==', false))),
+    watchVouchers('given', query(collection(db, 'vouchers'), where('givers', 'array-contains', session.mail))),
+    watchVouchers('got', query(collection(db, 'vouchers'), where('receivers', 'array-contains', session.mail))),
     watchRooms('main', doc(db, 'rooms', MAIN_ROOM), true),
     watchRooms('open', query(collection(db, 'rooms'), where('open', '==', true))),
     watchRooms('mine', query(collection(db, 'rooms'), where('members', 'array-contains', session.mail))),

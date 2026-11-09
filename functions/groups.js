@@ -14,7 +14,7 @@ import { promisify } from 'node:util';
 
 const scryptAsync = promisify(scrypt);
 
-export const FEATURES = ['chat', 'calendar', 'tasks', 'polls', 'trips', 'board', 'tree', 'question',
+export const FEATURES = ['chat', 'calendar', 'tasks', 'polls', 'trips', 'vouchers', 'board', 'tree', 'question',
   'recipes', 'contacts', 'weather', 'markets'];
 export const NAME_MAX = 40;
 export const ICON_MAX = 8;

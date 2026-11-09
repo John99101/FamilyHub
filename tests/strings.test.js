@@ -7,6 +7,7 @@ import { STRINGS } from '../public/js/strings.js';
 import { COLOR_IDS } from '../public/js/colors.js';
 import { QUESTIONS, questionIndex, questionFor } from '../public/js/questions.js';
 import { FEATURES, HOME_CARDS, THEMES, PATTERNS, FONTS } from '../public/js/design.js';
+import { KINDS } from '../public/js/vouchers.js';
 
 const LANGS = ['de', 'en', 'fr'];
 const DASHES = /[-‐-―−﹘﹣－]/;
@@ -77,6 +78,8 @@ describe('app text', () => {
       ...['day', 'stay', 'travel'].flatMap((k) => [`trips.label.${k}`, `trips.example.${k}`]),
       ...FEATURES.flatMap((f) => [`feature.${f}`, `feature.${f}.sub`]),
       ...HOME_CARDS.map((c) => `design.card.${c}`),
+      ...KINDS.map((k) => `vouchers.kind.${k}`),
+      ...['fresh', 'waiting', 'dusty', 'fossil', 'expiring', 'expired', 'planned', 'today', 'didIt', 'done'].map((m) => `vouchers.mood.${m}`),
       ...THEMES.map((x) => `design.theme.${x}`),
       ...PATTERNS.map((x) => `design.pattern.${x}`),
       ...FONTS.map((x) => `design.font.${x}`),

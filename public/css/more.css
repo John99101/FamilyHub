@@ -108,3 +108,46 @@
 .call-number { font-size: 15px; opacity: .85; font-variant-numeric: tabular-nums; }
 .big-btn { width: 100%; min-height: 56px; font-size: 19px; margin-top: 10px; }
 .simple-off { margin: 8px 0 24px; }
+
+/* ---------- gifts of time ---------- */
+
+.voucher { padding: 12px 0; border-top: 1px solid var(--border); border-radius: 8px; }
+.card-head + .voucher, .voucher-dice + .voucher { border-top: 0; }
+.voucher-head { display: flex; align-items: center; gap: 8px; }
+.voucher-icon { font-size: 22px; line-height: 1; }
+.voucher-title { margin: 0; font-size: 16px; flex: 1; overflow-wrap: anywhere; }
+.voucher-people { margin: 4px 0 0; font-weight: 600; }
+.voucher-people + .muted { margin: 2px 0 0; }
+.voucher-nudge { margin: 8px 0 0; padding: 6px 10px; border-radius: 8px; background: var(--surface-2); font-size: 14px; }
+.voucher-dusty .voucher-nudge, .voucher-fossil .voucher-nudge, .voucher-expiring .voucher-nudge,
+.voucher-didIt .voucher-nudge { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+.voucher-today .voucher-nudge, .voucher-planned .voucher-nudge { background: var(--bubble-own); }
+.voucher-note { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.voucher-memory {
+  margin: 8px 0 0; padding: 6px 12px; border-left: 3px solid var(--accent);
+  font-style: italic; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.voucher-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 10px; }
+.voucher-progress { margin-bottom: 10px; }
+.voucher-progress p { margin: 0 0 4px; }
+.voucher-progress-track { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.voucher-progress-bar { display: block; height: 100%; border-radius: inherit; background: var(--primary); transition: width .4s; }
+.voucher-dice { margin-bottom: 4px; }
+.voucher-picked { animation: voucher-pick 1.2s ease-in-out 2; }
+@keyframes voucher-pick {
+  50% { background: color-mix(in srgb, var(--accent) 22%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 22%, transparent); }
+}
+
+/* A short confetti burst when a gift is redeemed (not drawn when less motion is asked for). */
+.confetti-burst { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 1000; }
+.confetti-burst span {
+  position: absolute; left: 50%; top: 35%; width: 8px; height: 12px; border-radius: 2px;
+  background: var(--c); opacity: 0; animation: confetti-fly 1.6s cubic-bezier(.2, .7, .3, 1) forwards;
+}
+@keyframes confetti-fly {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0); }
+  100% { opacity: 0; transform: translate(var(--x), var(--y)) rotate(var(--r)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voucher-picked { animation: none; outline: 3px solid var(--accent); }
+}

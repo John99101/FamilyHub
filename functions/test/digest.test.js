@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import Anthropic from '@anthropic-ai/sdk';
 import {
   runWeeklyDigest, runAllDigests, collectWeek, buildDigestPrompt, buildDigestRequest, parseDigest,
-  weekRange, berlinDay, yearlyDay, addDays, dayWords, DIGEST_MAX_CHARS,
+  weekRange, berlinDay, yearlyDay, addDays, dayWords, DIGEST_MAX_CHARS, giftsToMention,
 } from '../digest.js';
 import { AI_MODEL } from '../ai-summary.js';
 import { memoryStore, silentLogger } from './helpers.js';
@@ -305,5 +305,61 @@ describe('visible names in the overview', () => {
       ...WEEK,
     });
     assert.deepEqual(week.tasksDue.map((t) => t.who), ['Benni', 'Anna']);
+  });
+});
+
+describe('gifts of time in the overview', () => {
+  const gift = (overrides) => ({
+    title: 'Escape Room', givers: ['anna@example.com'], receivers: ['ben@example.com'], givenOn: '2026-10-01',
+    until: '', status: 'open', plannedOn: '', doneOn: '', private: false, note: 'never sent', ...overrides,
+  });
+  const nameOf = (mail) => ({ 'anna@example.com': 'Anna', 'ben@example.com': 'Ben' })[mail] || '';
+  const mention = (list) => giftsToMention(list, nameOf, WEEK.start, WEEK.end);
+
+  it('mentions gifts planned this week, expiring soon or waiting for months, in that order', () => {
+    assert.deepEqual(mention([
+      gift({ title: 'Old', givenOn: '2026-07-01' }),
+      gift({ title: 'Expiring', until: '2026-11-20' }),
+      gift({ title: 'Planned', status: 'planned', plannedOn: '2026-10-31' }),
+    ]), [
+      { title: 'Planned', from: ['Anna'], to: ['Ben'], plannedFor: 'Saturday 31 October' },
+      { title: 'Expiring', from: ['Anna'], to: ['Ben'], validUntil: 'Friday 20 November' },
+      { title: 'Old', from: ['Anna'], to: ['Ben'], waitingMonths: 3 },
+    ]);
+  });
+
+  it('leaves out private, redeemed, fresh, already expired and later planned gifts', () => {
+    assert.deepEqual(mention([
+      gift({ givenOn: '2025-01-01', private: true }),
+      gift({ givenOn: '2025-01-01', status: 'done', doneOn: '2026-10-10' }),
+      gift({ givenOn: '2026-09-01' }),
+      gift({ givenOn: '2025-01-01', until: '2026-10-01' }),
+      gift({ givenOn: '2025-01-01', status: 'planned', plannedOn: '2026-12-05' }),
+      gift({ until: '2027-06-01' }),
+    ]), []);
+  });
+
+  it('a waiting gift alone is enough for an overview, and no notes or mail addresses are sent', () => {
+    const week = collectWeek({ vouchers: [gift({ givenOn: '2026-06-15' })], people, ...WEEK });
+    assert.equal(week.empty, false);
+    const prompt = buildDigestPrompt(week);
+    assert.match(prompt, /"giftsWaiting"/);
+    assert.ok(!prompt.includes('never sent'));
+    assert.ok(!prompt.includes('@'));
+  });
+
+  it('the Sunday run reads only shared gifts for the whole group, none for households', async () => {
+    const store = memoryStore({
+      people,
+      vouchers: [gift({ title: 'Secret trip', givenOn: '2025-01-01', private: true }), gift({ title: 'Kochkurs', givenOn: '2026-05-01' })],
+      households: [{ id: 'h1', name: 'Zürich', members: ['anna@example.com'] }],
+    });
+    const anthropic = stubAnthropic();
+    const result = await runAllDigests({ anthropic, store, now: SUNDAY_RUN, logger: silentLogger() });
+    assert.deepEqual(result.results.map((r) => r.kind), ['written', 'empty']);
+    assert.equal(anthropic.calls.length, 1);
+    const sent = JSON.stringify(anthropic.calls[0]);
+    assert.ok(sent.includes('Kochkurs'));
+    assert.ok(!sent.includes('Secret trip'));
   });
 });

@@ -113,7 +113,7 @@ service cloud.firestore {
         && d.get('spacing', 'normal') in ['normal', 'compact']
         // Start page cards in the order shown; missing = all in the usual order.
         && d.get('cards', []) is list
-        && d.get('cards', []).hasOnly(['notices', 'digest', 'days', 'birthdays', 'trips', 'tasks', 'question', 'polls', 'chat', 'weather'])
+        && d.get('cards', []).hasOnly(['notices', 'digest', 'days', 'birthdays', 'trips', 'tasks', 'question', 'polls', 'vouchers', 'chat', 'weather'])
         && d.get('cards', []).toSet().size() == d.get('cards', []).size()
         && optText(d.get('welcome', ''), 120);
     }
@@ -121,7 +121,7 @@ service cloud.firestore {
     // Which pages a group uses: switches for a known set of pages.
     function validFeatures(f) {
       return f is map
-        && f.keys().hasOnly(['chat', 'calendar', 'tasks', 'polls', 'trips', 'board', 'tree', 'question',
+        && f.keys().hasOnly(['chat', 'calendar', 'tasks', 'polls', 'trips', 'vouchers', 'board', 'tree', 'question',
           'recipes', 'contacts', 'weather', 'markets'])
         && f.values().hasOnly([true, false]);
     }
@@ -693,6 +693,51 @@ service cloud.firestore {
         allow create: if isMember() && validNote(request.resource.data) && createdNow(request.resource.data);
         allow update: if isMember() && validNote(request.resource.data) && keepsCreator();
         allow delete: if isMember() && creatorOrAdmin();
+      }
+
+      // ---------- gifts of time: activities, trips and vouchers people gave each other ----------
+      //
+      // A private one is seen only by its givers and receivers (not even by admins).
+
+      function inVoucher(d) {
+        return myMail() in d.givers || myMail() in d.receivers;
+      }
+
+      function validVoucher(d) {
+        return d.keys().hasOnly(['title', 'kind', 'occasion', 'note', 'givers', 'receivers', 'givenOn', 'until',
+            'status', 'plannedOn', 'doneOn', 'memory', 'private', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+          && d.keys().hasAll(['title', 'kind', 'occasion', 'note', 'givers', 'receivers', 'givenOn', 'until',
+            'status', 'plannedOn', 'doneOn', 'memory', 'private', 'createdBy', 'createdByName', 'createdAt', 'updatedAt'])
+          && title(d.title, 100)
+          && d.kind in ['activity', 'trip', 'voucher']
+          && optText(d.occasion, 60)
+          && optText(d.note, 1000)
+          && d.givers is list && d.givers.size() >= 1 && d.givers.size() <= 20 && validMailList(d.givers)
+          && d.receivers is list && d.receivers.size() >= 1 && d.receivers.size() <= 20 && validMailList(d.receivers)
+          && isoDay(d.givenOn)
+          && (d.until == '' || isoDay(d.until))
+          && d.status in ['open', 'planned', 'done']
+          && (d.plannedOn == '' || isoDay(d.plannedOn))
+          && (d.status != 'planned' || d.plannedOn != '')
+          && (d.doneOn == '' || isoDay(d.doneOn))
+          && ((d.status == 'done') == (d.doneOn != ''))
+          && optText(d.memory, 500)
+          && d.private is bool
+          // Whoever writes a private one stays in it, so it never becomes invisible to them.
+          && (!d.private || inVoucher(d))
+          && d.updatedAt == request.time;
+      }
+
+      match /vouchers/{id} {
+        allow read: if isMember() && (resource.data.private == false || inVoucher(resource.data));
+        allow create: if isMember() && validVoucher(request.resource.data) && createdNow(request.resource.data);
+        // Givers and receivers plan and redeem it; admins only see (and so change) the shared ones.
+        allow update: if isMember()
+          && (resource.data.createdBy == request.auth.uid || inVoucher(resource.data)
+            || (isAdmin() && resource.data.private == false))
+          && validVoucher(request.resource.data) && keepsCreator();
+        allow delete: if isMember()
+          && (resource.data.createdBy == request.auth.uid || (isAdmin() && resource.data.private == false));
       }
 
       // ---------- family tree (everyone may add and change people) ----------

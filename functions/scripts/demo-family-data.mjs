@@ -1,5 +1,5 @@
 // Fills the LOCAL Firestore emulator with made up family data (calendar,
-// tasks, polls, recipes, contacts, places, chat rooms, a weekly overview
+// tasks, polls, gifts of time, recipes, contacts, places, chat rooms, a weekly overview
 // written by a fake Claude). Nothing real is called.
 //
 //   1. npm run emulators          (in the project folder, keep it running)
@@ -135,6 +135,19 @@ await g.doc('polls/p3').set({
   question: 'Neue Farbe für den Flur?', options: ['Weiß', 'Hellgrau'], multi: false, closed: true,
   votes: { demo_anna: [0], demo_ben: [0] }, ...by(...ANNA),
 });
+
+// ---------- gifts of time ----------
+const CHEF = ['demo_chef', 'Jonas Beispiel'];
+const gift = (id, who, fields) => g.doc(`vouchers/${id}`).set({
+  kind: 'activity', occasion: '', note: '', until: '', status: 'open', plannedOn: '', doneOn: '', memory: '', private: false,
+  ...by(...who), updatedAt: ago(600), ...fields,
+});
+await gift('v1', ANNA, { title: 'Escape Room zu dritt', kind: 'voucher', occasion: 'Weihnachten', givers: ['anna@example.com'], receivers: ['ben@example.com', 'chef@example.com'], givenOn: day(-320) });
+await gift('v2', CHEF, { title: 'Wochenende in Lyon', kind: 'trip', occasion: 'Geburtstag', givers: ['chef@example.com'], receivers: ['anna@example.com'], givenOn: day(-45), note: 'Hotel und Zug zahlen wir.', status: 'planned', plannedOn: day(5) });
+await gift('v3', BEN, { title: 'Kochkurs Thai', occasion: 'Geburtstag', givers: ['ben@example.com'], receivers: ['chef@example.com'], givenOn: day(-120), until: day(20) });
+await gift('v4', CHEF, { title: 'Klettern im Wald', givers: ['chef@example.com', 'anna@example.com'], receivers: ['ben@example.com'], givenOn: day(-8) });
+await gift('v5', ANNA, { title: 'Konzertabend', occasion: 'Hochzeitstag', givers: ['anna@example.com'], receivers: ['chef@example.com'], givenOn: day(-200), status: 'done', doneOn: day(-30), memory: 'Die Zugabe war das Beste!' });
+await gift('v6', BEN, { title: 'Wellnesstag zu zweit', kind: 'voucher', givers: ['ben@example.com'], receivers: ['anna@example.com'], givenOn: day(-3), private: true });
 
 // ---------- recipes ----------
 await g.doc('recipes/r1').set({

@@ -111,18 +111,21 @@ export function createFirestoreStore(db, root = '') {
     async getFamilyWeekData({ from, to, base = '' }) {
       const docs = (snap) => snap.docs.map((d) => d.data());
       // base: '' for the whole family, 'households/{id}/' for one household.
-      const [dated, yearly, tasks, polls, people] = await Promise.all([
+      // Gifts of time belong to the whole group; only shared ones are read (private ones never reach the AI).
+      const [dated, yearly, tasks, polls, people, vouchers] = await Promise.all([
         db.collection(`${root}${base}events`).where('date', '>=', from).where('date', '<=', to).get(),
         db.collection(`${root}${base}events`).where('repeat', '==', 'yearly').get(),
         db.collection(`${root}${base}tasks`).where('done', '==', false).get(),
         db.collection(`${root}${base}polls`).where('closed', '==', false).get(),
         db.collection(`${root}people`).get(),
+        base ? null : db.collection(`${root}vouchers`).where('private', '==', false).get(),
       ]);
       return {
         events: [...docs(dated).filter((e) => e.repeat !== 'yearly'), ...docs(yearly)],
         tasks: docs(tasks),
         polls: docs(polls),
         people: docs(people),
+        vouchers: vouchers ? docs(vouchers) : [],
       };
     },
 

@@ -30,8 +30,8 @@ settings).
   in which order. Light or dark stays each person's own choice. No uploads.
 - **Start** (home): greeting, pinned notices, the weekly overview by Claude,
   the question of the day, the next trip, the next 7 days, upcoming birthdays,
-  tasks for you, polls waiting for your vote, the newest chat messages, the
-  weather.
+  tasks for you, polls waiting for your vote, your open vouchers, the newest
+  chat messages, the weather.
 - **Family chat**: the main room "Familie" plus rooms anyone can open, for
   everyone or only for chosen people. Text up to 2000 characters, replies,
   reactions, live updates, older messages in pages of 50, "new" markers.
@@ -64,7 +64,7 @@ settings).
   task off, recently done tasks.
 - **Mehr** (more): **Familie** (your name, colors, names for others,
   households), **Pinnwand**, **Reisen**, **Frage des Tages**, **Stammbaum**
-  (all four below), **Umfragen** (polls with one or several answers),
+  (all four below), **Gutscheine** (below), **Umfragen** (polls with one or several answers),
   **Rezepte** (family cookbook), **Kontakte** (contacts and emergency info,
   only admins edit), **Wetter** (weather for the family's places, from
   Open-Meteo), Börse, Risiko and Einstellungen.
@@ -84,9 +84,21 @@ settings).
   Everyone can add and change people.
 - Notices, notebook pages and trips belong to the whole family or to one
   household, like calendar entries.
+- **Gutscheine** (gifts of time): outings, trips and vouchers people gave
+  each other ("Escape Room", "a weekend in Rome, we pay hotel and train"),
+  so they really happen. Each one says who gave it to whom, the occasion,
+  and optionally a last valid day. Its nudge grows with age (fresh, waiting,
+  gathering dust after 3 months, "almost a fossil" after a year) or counts
+  down to the last valid day. Givers and receivers plan a day (optionally
+  straight into the calendar), then mark it redeemed: confetti, and a short
+  memory for the "Schöne Erinnerungen" list. A progress bar shows how many
+  are redeemed, and a dice button picks one of your open ones. A voucher can
+  be private: then only its givers and receivers see it (not even admins).
+  The Start page shows your most urgent ones, and the weekly overview nudges
+  about shared ones.
 - **Weekly overview**: every Sunday at 17:00 Berlin time, Claude Opus 5.5
   writes a short overview of the coming week in German, English and French
-  from the calendar, due tasks and open polls.
+  from the calendar, due tasks, open polls and shared vouchers that wait.
 - **Börse** (markets): US indices, the 200 largest US stocks, a family
   watchlist of up to 10 symbols with small charts. Prices are delayed at least
   15 minutes, data from NGN Market. No trading, no advice, no alerts. Locked
@@ -126,7 +138,8 @@ Browser (public/)                Firebase (Google, region europe-west3)
                                      │          sends only the computed figures
                                      │          weeklyDigest, Sunday 17:00 Berlin time
                                      │          sends the coming week's calendar entries,
-                                     │          due tasks and open polls (nothing else)
+                                     │          due tasks, open polls and waiting shared
+                                     │          vouchers (nothing else)
                                      │          translateMessage, when someone taps
                                      │          Übersetzen: sends that one message text
                                      ▼
@@ -172,8 +185,10 @@ Keys (NGN_API_KEY, ANTHROPIC_API_KEY) live only in Secret Manager.
 - **Weekly overview** (`functions/digest.js`): the code collects the coming
   week (Monday to Sunday) itself; Claude only words it. Sent: titles, days,
   times and places of calendar entries, birthdays with age, due tasks with
-  the first name of who does them, open poll questions. Never sent: notes,
-  chat, contacts, recipes, mail addresses. Titles are marked as data, and
+  the first name of who does them, open poll questions, and shared vouchers
+  (title and first names) that are planned in the week, expire within 30
+  days of it, or have waited 3 months or more. Never sent: notes, private
+  vouchers, chat, contacts, recipes, mail addresses. Titles are marked as data, and
   Claude is told never to follow instructions in them. An empty week makes
   no request at all. Admins can switch it off (`config/digest`). There is
   one overview for the whole family and one per household, each made only
@@ -243,6 +258,7 @@ are readable only with `marketAccess`.
 | `events/{id}` | `title`, `date`, `endDate`, `time`, `place`, `note`, `kind` (event, birthday), `repeat` (none, yearly), `yearKnown`, `person` (mail or empty: whose color), created and updated fields | members; change and delete: creator or admin |
 | `tasks/{id}` | `title`, `note`, `assignee` (mail or empty), `due`, `done`, `doneAt`, `doneBy`, created and updated fields | members; tick off: anyone; change: creator or admin; delete: creator, admin, or anyone once done |
 | `polls/{id}` | `question`, `options` (2 to 10), `multi`, `closed`, `votes { uid: [answer numbers] }`, created fields | members; vote: each person only their own; close and delete: creator or admin |
+| `vouchers/{id}` | `title`, `kind` (activity, trip, voucher), `occasion`, `note`, `givers`, `receivers` (mail lists), `givenOn`, `until` (day or empty), `status` (open, planned, done), `plannedOn`, `doneOn`, `memory`, `private`, created and updated fields | shared ones: members read; private ones: only givers and receivers; plan, redeem and change: creator, givers, receivers, or an admin for shared ones; delete: creator, or an admin for shared ones |
 | `recipes/{id}` | `title`, `category`, `servings`, `duration`, `ingredients`, `steps`, `source`, created and updated fields | members; change and delete: creator or admin |
 | `contacts/{id}` | `name`, `group`, `phone`, `phone2`, `mail`, `address`, `note`, `quick` (big call button in simple mode), `updatedAt`, `updatedBy` | admins only (everyone reads) |
 | `places/{id}` | `name`, `country`, `lat`, `lon`, created fields | members; delete: creator or admin |
@@ -350,7 +366,7 @@ notice board, notebook, family tree and question of the day on 23 October
 | Sign in | Google, or mail and password with a confirmed mail; the rules check the provider (only these two) and the confirmed mail |
 | Access | membership in `groups/{g}/members/{uid}`, checked by the rules on every read and write in the group; members are created only by the functions after the right group password |
 | Group passwords | stored only as a scrypt hash in `groupSecrets` (nobody can read it); checked in a function; 5 wrong tries per person and 20 per group per hour; codes without look alike characters |
-| Data | deny by default; every field of every write checked (`firestore.rules`, 105 tests); market, AI, overview and translation results written only by the functions |
+| Data | deny by default; every field of every write checked (`firestore.rules`, 135 tests); market, AI, overview and translation results written only by the functions |
 | Households | everything inside a household (calendar, tasks, polls, chat, overview) is readable and writable only by its members, admins included; the rules check membership by the path |
 | Nicknames | each person's names for others live in a document only that person can read |
 | Colors and visible names | a color (and a visible name) is a document named after it, so two people can never hold the same one |
@@ -422,6 +438,7 @@ public/                 the website (served by Firebase Hosting)
   js/calendar.js        Kalender page
   js/tasks.js           Aufgaben page
   js/polls.js           Umfragen page
+  js/voucher-page.js    Gutscheine page (vouchers.js: their nudges and order)
   js/recipes.js         Rezepte page
   js/contacts.js        Kontakte page
   js/weather.js         Wetter page (Open-Meteo)

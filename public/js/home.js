@@ -1,5 +1,6 @@
 // Start page: notices, the weekly overview, the next days, birthdays, trips,
-// tasks, the question of the day, polls that wait for a vote, the newest chat
+// tasks, the question of the day, polls that wait for a vote, gifts of time
+// that wait to be redeemed, the newest chat
 // messages and the weather. In simple mode: big text, today and tomorrow,
 // big call buttons, the newest messages.
 import { $, el, card, emptyNote, formatWeekdayDay, formatDayMonth, formatTime, relativeDays } from './ui.js';
@@ -10,6 +11,8 @@ import { entryButton, entryColor } from './calendar.js';
 import { paint } from './colors.js';
 import { taskItem, sortOpenTasks } from './tasks.js';
 import { myVote, voteCount } from './polls.js';
+import { KIND_ICONS, myOpenVouchers } from './vouchers.js';
+import { moodLine } from './voucher-page.js';
 import { weatherInfo } from './weather.js';
 import { db, collection, query, where, onSnapshot } from './firebase.js';
 import { activeNotices, noticeNode } from './board.js';
@@ -33,7 +36,7 @@ const link = (href, text) => el('a', { class: 'btn-link', href, text });
 // The group page each start card belongs to (the overview is always there).
 const CARD_FEATURE = {
   notices: 'board', days: 'calendar', birthdays: 'calendar', trips: 'trips', tasks: 'tasks',
-  question: 'question', polls: 'polls', chat: 'chat', weather: 'weather',
+  question: 'question', polls: 'polls', vouchers: 'vouchers', chat: 'chat', weather: 'weather',
 };
 
 export function createHome(data, pages) {
@@ -136,6 +139,16 @@ export function createHome(data, pages) {
       el('a', { class: 'simple-main link-plain', href: '#/umfragen', text: p.question }),
       el('span', { class: 'muted small', text: t('polls.votes', { n: voteCount(p) }) }),
     ]))), { action: link('#/umfragen', t('home.toPolls')) });
+  }
+
+  // Gifts this person gives or gets that still wait, the most urgent first.
+  function vouchersCard() {
+    const mine = myOpenVouchers(data.state.vouchers, session.mail, todayIso()).slice(0, 3);
+    if (!mine.length) return null;
+    return card(t('home.vouchers'), el('ul', { class: 'simple-list' }, mine.map((v) => el('li', {}, [
+      el('a', { class: 'simple-main link-plain', href: '#/gutscheine', text: `${KIND_ICONS[v.kind] || KIND_ICONS.voucher} ${v.title}` }),
+      el('span', { class: 'muted small', text: moodLine(v) }),
+    ]))), { action: link('#/gutscheine', t('home.toVouchers')) });
   }
 
   function chatCard() {
@@ -252,7 +265,7 @@ export function createHome(data, pages) {
     if (isSimpleMode()) { renderSimple(name); return; }
     const build = {
       notices: noticesCard, digest: digestCards, days: nextDaysCard, birthdays: birthdaysCard, trips: tripsCard,
-      tasks: tasksCard, question: questionCard, polls: pollsCard, chat: chatCard, weather: weatherCard,
+      tasks: tasksCard, question: questionCard, polls: pollsCard, vouchers: vouchersCard, chat: chatCard, weather: weatherCard,
     };
     // The cards the group chose, in its order, for the pages it uses.
     const cards = homeCards(session.group?.design).filter(on).flatMap((c) => build[c]());

@@ -1,6 +1,6 @@
 # FamilyHub
 
-A private website and installable app for families and other groups (about 5 to 15 people each) on Firebase only: chat with Claude translations, calendar, tasks, polls, trips, notice board, family tree, question of the day, recipes, contacts, weather, a simple mode for grandparents, plus a markets page with risk figures. Sign in with Google or mail and password; everything lives inside groups people join with a group code and password (checked by a callable function). What matters most: the security rules, the family's privacy, and never touching the live project by accident. Full feature list and data model: `README.md`; owner setup and costs: `SETUP.md`.
+A private website and installable app for families and other groups (about 5 to 15 people each) on Firebase only: chat with Claude translations, calendar, tasks, polls, trips, vouchers (gifts of time), notice board, family tree, question of the day, recipes, contacts, weather, a simple mode for grandparents, plus a markets page with risk figures. Sign in with Google or mail and password; everything lives inside groups people join with a group code and password (checked by a callable function). What matters most: the security rules, the family's privacy, and never touching the live project by accident. Full feature list and data model: `README.md`; owner setup and costs: `SETUP.md`.
 
 ## Tech stack
 

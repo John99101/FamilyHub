@@ -3,9 +3,9 @@
 // start page cards. Group admins choose them; every device draws them by
 // setting CSS variables (app.css falls back to the usual look).
 
-export const FEATURES = ['chat', 'calendar', 'tasks', 'polls', 'trips', 'board', 'tree', 'question',
+export const FEATURES = ['chat', 'calendar', 'tasks', 'polls', 'trips', 'vouchers', 'board', 'tree', 'question',
   'recipes', 'contacts', 'weather', 'markets'];
-export const HOME_CARDS = ['notices', 'digest', 'days', 'birthdays', 'trips', 'tasks', 'question', 'polls', 'chat', 'weather'];
+export const HOME_CARDS = ['notices', 'digest', 'days', 'birthdays', 'trips', 'tasks', 'question', 'polls', 'vouchers', 'chat', 'weather'];
 export const THEMES = ['calm', 'warm', 'forest', 'ocean', 'playful', 'night'];
 export const PATTERNS = ['none', 'dots', 'grid', 'waves', 'hearts', 'stars', 'leaves', 'flowers',
   'mountains', 'bubbles', 'confetti', 'stripes', 'houses'];

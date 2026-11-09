@@ -82,6 +82,7 @@ export function memoryStore(initial = {}) {
     events: [],
     tasks: [],
     polls: [],
+    vouchers: [],         // gifts of time (the store hands out only shared ones)
     people: [],
     weekQueries: [],
     households: [],       // [{ id, name, members }]
@@ -118,6 +119,7 @@ export function memoryStore(initial = {}) {
         events: src.events.filter((e) => e.repeat === 'yearly' || (e.date >= from && e.date <= to)),
         tasks: src.tasks.filter((t) => t.done === false),
         polls: src.polls.filter((p) => p.closed === false),
+        vouchers: base ? [] : state.vouchers.filter((v) => v.private === false),
         people: state.people,
       });
     },

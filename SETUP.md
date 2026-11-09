@@ -471,7 +471,8 @@ anyone opens the app.
 
 - Every Sunday at 17:00 Berlin time the server collects the coming week
   (Monday to Sunday): calendar entries, birthdays, tasks that are due, open
-  polls. Claude Opus 5.5 writes a short overview in German, English and
+  polls, and shared vouchers that wait to be redeemed (private ones never).
+  Claude Opus 5.5 writes a short overview in German, English and
   French; everyone sees it in their language. Notes, chat, contacts, recipes
   and mail addresses are never sent. If nothing is planned, nothing is sent.
 - The first one appears on the first Sunday after the deploy. To get one

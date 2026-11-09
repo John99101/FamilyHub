@@ -26,11 +26,12 @@ import { createWeather } from './weather.js';
 import { createFamilyPage } from './family-page.js';
 import { createBoard } from './board.js';
 import { createTrips } from './trips.js';
+import { createVoucherPage } from './voucher-page.js';
 import { createQuestionPage } from './question-page.js';
 import { createTree } from './tree.js';
 import { isSimpleMode, SIMPLE_ROUTES } from './simple.js';
 
-export const APP_VERSION = '1.5.1';
+export const APP_VERSION = '1.6.0';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();
@@ -54,6 +55,7 @@ const ROUTES = {
   familie: { title: 'nav.family', view: 'view-family', page: 'family', tab: 'mehr', back: true },
   pinnwand: { title: 'nav.board', view: 'view-board', page: 'board', tab: 'mehr', back: true },
   reisen: { title: 'nav.trips', view: 'view-trips', page: 'trips', tab: 'mehr', back: true },
+  gutscheine: { title: 'nav.vouchers', view: 'view-vouchers', page: 'vouchers', tab: 'mehr', back: true },
   frage: { title: 'nav.question', view: 'view-question', page: 'question', tab: 'mehr', back: true },
   stammbaum: { title: 'nav.tree', view: 'view-tree', page: 'tree', tab: 'mehr', back: true },
   umfragen: { title: 'nav.polls', view: 'view-polls', page: 'polls', tab: 'mehr', back: true },
@@ -66,7 +68,7 @@ const ROUTES = {
 };
 // The group page switch each route belongs to (a switched off page leads to the start page).
 const ROUTE_FEATURE = {
-  chat: 'chat', kalender: 'calendar', aufgaben: 'tasks', umfragen: 'polls', reisen: 'trips', pinnwand: 'board',
+  chat: 'chat', kalender: 'calendar', aufgaben: 'tasks', umfragen: 'polls', reisen: 'trips', gutscheine: 'vouchers', pinnwand: 'board',
   stammbaum: 'tree', frage: 'question', rezepte: 'recipes', kontakte: 'contacts', wetter: 'weather', boerse: 'markets', risiko: 'markets',
 };
 
@@ -289,6 +291,7 @@ function startApp() {
     family: createFamilyPage(familyData),
     board: createBoard(familyData),
     trips: createTrips(familyData),
+    vouchers: createVoucherPage(familyData),
     question: createQuestionPage(familyData),
     tree: createTree(familyData),
     polls: createPolls(familyData),
