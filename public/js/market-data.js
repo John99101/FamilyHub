@@ -6,7 +6,8 @@ import { db, doc, onSnapshot, getDoc } from './firebase.js';
 export const SYMBOL_PATTERN = /^[A-Z0-9][A-Z0-9.-]{0,11}$/;
 export const WATCHLIST_MAX = 10;
 
-export function createMarketData() {
+/** enabled: false for people without market access (nothing is read then). */
+export function createMarketData(enabled = true) {
   const state = {
     latest: null,     // market/latest
     status: null,     // market/status
@@ -28,7 +29,7 @@ export function createMarketData() {
     notify();
   }, (err) => console.warn(`Reading ${path} failed`, err.code));
 
-  const stops = [
+  const stops = !enabled ? [] : [
     watch('market/latest', 'latest'),
     watch('market/status', 'status'),
     watch('config/market', 'switch'),

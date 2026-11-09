@@ -6,6 +6,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { STRINGS } from '../public/js/strings.js';
 import { COLOR_IDS } from '../public/js/colors.js';
 import { QUESTIONS, questionIndex, questionFor } from '../public/js/questions.js';
+import { FEATURES, HOME_CARDS, THEMES, PATTERNS, FONTS } from '../public/js/design.js';
 
 const LANGS = ['de', 'en', 'fr'];
 const DASHES = /[-‐-―−﹘﹣－]/;
@@ -74,9 +75,18 @@ describe('app text', () => {
       ...['de', 'en', 'fr', 'other'].map((x) => `chat.from.${x}`),
       ...['empty', 'long', 'chars', 'taken', 'failed'].map((x) => `family.name.${x}`),
       ...['day', 'stay', 'travel'].flatMap((k) => [`trips.label.${k}`, `trips.example.${k}`]),
+      ...FEATURES.flatMap((f) => [`feature.${f}`, `feature.${f}.sub`]),
+      ...HOME_CARDS.map((c) => `design.card.${c}`),
+      ...THEMES.map((x) => `design.theme.${x}`),
+      ...PATTERNS.map((x) => `design.pattern.${x}`),
+      ...FONTS.map((x) => `design.font.${x}`),
+      ...['main', 'accent', 'background'].map((x) => `design.color.${x}`),
+      ...[0, 1, 2, 3, 4].map((n) => `group.pw.level${n}`),
+      ...['signin', 'register', 'reset'].map((x) => `start.${x}`),
+      ...['name', 'password', 'pages', 'look', 'summary'].flatMap((x) => [`start.step.${x}`, `start.step.${x}.hint`]),
     ];
     // Plus every quoted key such as 'weather.clear' or 'settings.digestOn' in the page code.
-    const prefixes = 'cal|tasks|polls|recipes|contacts|weather|rooms|chat|home|settings|day|nav|common|more|form|family|house|color|board|trips|question|tree|simple';
+    const prefixes = 'cal|tasks|polls|recipes|contacts|weather|rooms|chat|home|settings|day|nav|common|more|form|family|house|color|board|trips|question|tree|simple|start|group|feature|design';
     const jsDir = new URL('../public/js/', import.meta.url);
     for (const file of readdirSync(jsDir).filter((f) => f.endsWith('.js') && !f.startsWith('strings'))) {
       const src = readFileSync(new URL(file, jsDir), 'utf8');

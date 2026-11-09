@@ -67,7 +67,10 @@ missing there.
 1. Left menu: **Build** → **Authentication** → **Get started**.
 2. Tab **Sign-in method** → **Google** → switch **Enable** on.
 3. **Public-facing name**: `FamilyHub`. **Project support email**: your mail.
-4. Click **Save**. Do not enable any other provider.
+4. Click **Save**.
+5. **Add new provider** → **Email/Password** → switch the first **Enable** on
+   (leave **Email link (passwordless sign-in)** off) → **Save**. Do not
+   enable any other provider; the security rules refuse all others anyway.
 
 **Firestore database in europe-west3 (Frankfurt), production mode**
 
@@ -97,8 +100,8 @@ missing there.
 
 **Why the web config is not secret:** these values only tell the browser which
 Firebase project to talk to. Every visitor's browser downloads them anyway, so
-hiding them is impossible and unnecessary. What protects your data is: Google
-sign in, the allow list, the security rules in `firestore.rules`, and App
+hiding them is impossible and unnecessary. What protects your data is: the
+sign in, group membership (code and password), the security rules in `firestore.rules`, and App
 Check (step 6). The NGN Market key is different: it is a real secret and lives
 only in Secret Manager (step 3).
 
@@ -128,7 +131,7 @@ only in Secret Manager (step 3).
 deploy: from the next US trading slot after the deploy, the server fetches
 prices. You can switch it off in the app at any time (section 7).
 
-**Only if you later add other people to the allow list:** the NGN Market
+**Only if you later open the market pages to other people:** the NGN Market
 Terms license the data for "personal" use and do not clearly allow showing it
 to other people on the free plan (see README.md, section "Terms of Service").
 While you are the only user, that question does not arise. Before giving
@@ -178,23 +181,58 @@ terms, API data is not used to train models by default.
 
 ---
 
-## 4. Add the first admin by hand
+## 4. Groups, and the move of the existing family (version 1.5.0)
 
-The allow list is one Firestore document. Nobody can sign in until it exists.
+Since version 1.5.0 there is no allow list. Anyone can sign in (Google, or
+mail and password with a confirmed mail) but sees nothing until they are in a
+group: they start one, or join one with its group code and group password.
 
-1. Firebase console → **Build** → **Firestore Database** → tab **Data**.
-2. Click **+ Start collection**. Collection ID: `config` → **Next**.
-3. Document ID: `access` (type it; do not use Auto ID).
-4. Add field: name `admins`, type **array**. Inside it, add one element of
-   type **string** with value `<your-mail>` (all lower case, the exact mail
-   of your Google account).
-5. Add field: name `members`, type **array**, leave it empty.
-6. Click **Save**.
+**New setup (no family data yet):** after the deploy (step 5), open the app,
+sign in and **Gruppe gründen**. You are its admin. The market pages stay
+locked for every new group; to unlock them for your own group, in the
+Firestore console set the field `marketsUnlocked` of `groups/<id>` to `true`
+(type boolean) and create the document `marketAccess/<your uid>` with the
+field `admin` = `true` (your uid is in **Authentication** → **Users**). An
+unlock code in the app follows later.
 
-Result: document path `config/access` with fields
-`admins: ["<your-mail>"]` and `members: []`.
+**Upgrade of the running family app** (it still uses `config/access`). Do
+these in one quiet evening, in this order:
 
-Everyone else is added later inside the app (section 7).
+1. Enable **Email/Password** sign in (step 2, point 5).
+2. The move script needs Google credentials on your computer. Install the
+   Google Cloud CLI from https://cloud.google.com/sdk/docs/install (ask me
+   first if you want help; it installs globally), then run
+   `gcloud auth application-default login` and sign in with the owner
+   account.
+3. Look first; nothing is written:
+
+   ```
+   node functions/scripts/migrate-to-groups.mjs --project familyhub-5355f
+   ```
+
+   It lists who becomes a member (admins stay admins), the mails without a
+   sign in account (they join later with code and password) and the
+   collections it will copy.
+4. Then for real. It asks for the new group password twice (typing stays
+   hidden) and prints the **group code**:
+
+   ```
+   node functions/scripts/migrate-to-groups.mjs --project familyhub-5355f --write
+   ```
+
+   It creates the group "Familie" (`groups/familie`, all pages on, markets
+   unlocked, market access for everyone on the old list) and copies all
+   family data into it. The old data stays untouched, so nothing is lost if
+   something goes wrong. It refuses to run a second time.
+5. Deploy (step 5). The new rules only allow the group paths from now on.
+6. Send the group code and password to the people the script listed as
+   "without an account". Everyone else is already in the group.
+7. After a few weeks, when all is well, you may delete the old top level
+   collections in the console (the move left them in place).
+
+**Add people later:** send them the link plus the group code (on the
+**Gruppe** page, **Code kopieren**) and the group password. Admins can change
+the password there; people already in the group stay in.
 
 ---
 
@@ -237,18 +275,22 @@ During the first deploy:
 - If it asks about a **cleanup policy** for container images, answer **Y**
   and keep the suggested 1 day. This keeps storage (and cost) near zero.
 - If it says the secret NGN_API_KEY or ANTHROPIC_API_KEY is missing, do
-  step 3 (and 3b) first. The deploy creates six functions: `marketUpdate`
+  step 3 (and 3b) first. The deploy creates ten functions: `marketUpdate`
   (prices), `riskSummary` (the daily AI summary), `weeklyDigest` (the weekly
   overviews), `translateMessage` (chat translations), `cleanupRoom` (deletes
-  the messages of a deleted chat room) and `cleanupHousehold` (deletes
-  everything inside a deleted household).
-- `translateMessage`, `cleanupRoom` and `cleanupHousehold` react to the
+  the messages of a deleted chat room), `cleanupHousehold` (deletes
+  everything inside a deleted household), `cleanupGroup` (deletes everything
+  inside a deleted group), and `createGroupCall`, `joinGroupCall`,
+  `setGroupPasswordCall` (called by the app to start a group, join one and
+  set a new group password).
+- `translateMessage`, `cleanupRoom`, `cleanupHousehold` and `cleanupGroup` react to the
   database. On the very first deploy of such a function Google may still be
   setting up permissions for that and the deploy can fail with a message
   about Eventarc or permissions. Wait 5 minutes and run the same deploy
   command again.
-- The deploy also creates one database index (for the list of recently done
-  tasks). It takes a few minutes to build; until then that list stays empty.
+- The deploy also creates database indexes (recently done tasks, and members
+  by uid for the list "Deine Gruppen"). They take a few minutes to build;
+  until then those lists stay empty or show an error.
 
 At the end it prints **Hosting URL**: `https://familyhub-5355f.web.app`.
 Both `https://familyhub-5355f.web.app` and `https://familyhub-5355f.firebaseapp.com`
@@ -259,8 +301,8 @@ there.
 Open it, click **Mit Google anmelden** (the app follows the browser's
 language: German, English or French; you can change it under
 **Mehr** → **Einstellungen** → **Sprache**), and sign in with `<your-mail>`.
-You should see the Start page. The first time an admin opens the chat, the
-room "Familie" is created automatically.
+You should see the group list: open your group, or start one (step 4). The
+first time an admin opens the chat, the main room is created automatically.
 
 **Install as an app on phones**
 
@@ -312,25 +354,26 @@ App Check does not apply to.
 
 ## 7. Daily use, costs, and the off switch
 
-**Before you invite the family: the market pages**
+**The market pages**
 
-Everyone on the allow list sees **Börse** and **Risiko**. The NGN Market free
-licence covers personal use only (README, "Terms of Service"). So before you
-add others, either get NGN's written OK (step 3 has a ready mail), or switch
-the market part off (**Mehr** → **Einstellungen** → **Börse**), or ask for a
-change that shows these two pages only to admins.
+Only people with a `marketAccess` document see **Börse** and **Risiko**, and
+only in a group with markets unlocked ("Familie"). Whoever joins "Familie"
+gets market access. The NGN Market free licence covers personal use only
+(README, "Terms of Service"): before more people join, either get NGN's
+written OK (step 3 has a ready mail) or switch the market part off (**Mehr**
+→ **Einstellungen** → **Börse**).
 
-**Add family members**
+**Add people to a group**
 
-1. In the app: **Mehr** → **Einstellungen** → **Zugang**.
-2. Type the person's Gmail address → **Hinzufügen**.
-3. Send them the link. They click **Mit Google anmelden**.
-4. To give someone admin rights: **Zum Admin machen**. To remove someone:
+1. In the app: **Mehr** → **Gruppe** → **Code kopieren**.
+2. Send them the link, the code and the group password. They sign in (Google,
+   or **Konto anlegen** with mail and password), then **Gruppe beitreten**.
+3. To give someone admin rights: **Zum Admin machen**. To remove someone:
    **Entfernen** (from then on every new request of theirs is refused; an app
-   they still have open may keep showing what it had already loaded). You
-   cannot remove yourself.
+   they still have open may keep showing what it had already loaded). After
+   removing someone, change the group password, or they can join again.
 
-Anyone not on the list sees only "Kein Zugang".
+Anyone who is not in a group sees only the group list.
 
 **When prices appear**
 
@@ -364,7 +407,7 @@ holidays. The switch is in the app (admins only): **Einstellungen** →
   verwenden** goes back to the Google name.
 - Everyone gets a free color when they first sign in and can change it
   there. A color can only be held by one person; colors of people who are
-  no longer on the allow list can be freed by an admin.
+  no longer in the group can be freed by an admin.
 - "Namen geben": names you give others are only visible to you.
 - Households (admins): **+ Haushalt**, give it a name and tick who belongs
   to it. A person can be in several. Members then see a household filter in
@@ -575,13 +618,14 @@ limit of 100 per person and the spend limit from step 3b cap the worst case.
 
 ## 8. Extra safety (recommended, about 15 minutes)
 
-The code side is locked down (sign in, allow list, security rules, strict
+The code side is locked down (sign in, group passwords, security rules, strict
 browser headers, keys only in Secret Manager). These steps can only be done by
 you in the consoles. Do them in this order.
 
 **a. 2 Step Verification on the Google accounts** (most important)
 
-The app is exactly as safe as the Google accounts on the allow list. Open
+The app is exactly as safe as the accounts of the people in a group (and the
+group password). Open
 https://myaccount.google.com/signinoptions/twosv and turn it on (a passkey or
 the Google prompt on your phone is best). Ask every admin to do the same, and
 ideally every family member.
@@ -631,8 +675,8 @@ ever need one.
 **h. Look in now and then**
 
 - Firebase console → **Authentication** → **Users** lists everyone who ever
-  signed in, also strangers who tried. Strangers see only "Kein Zugang" and
-  cannot read anything; you may delete them there.
+  signed in, also strangers. Without a group code and password they see only
+  an empty group list and cannot read anything; you may delete them there.
 - The budget alert (step 1) and the Anthropic spend limit (step 3b) warn you
   about unexpected costs.
 
@@ -663,6 +707,7 @@ npm run emulators
 
 starts a local copy (fake sign in, local database, nothing goes to Google or
 NGN Market) at http://127.0.0.1:5000. In a second window,
-`npm run demo:market` fills the local database with made up market data. Add
-yourself to the local allow list in the Emulator UI at http://127.0.0.1:4000
-(Firestore → `config/access`) first. Stop with Ctrl+C.
+`npm run demo:market` fills the local database with made up market data and
+`npm run demo:family` makes a demo group with three accounts (mails and the
+password are at the top of `functions/scripts/demo-family-data.mjs`). Sign in
+with one of them using mail and password. Stop with Ctrl+C.

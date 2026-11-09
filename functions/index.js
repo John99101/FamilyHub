@@ -26,11 +26,18 @@
 // cleanupHousehold: when an admin deletes a household, deletes everything in
 // it (calendar, tasks, polls, trips, notes, chat room with messages and
 // translations, weekly overview).
+// cleanupGroup: when a group admin deletes a group, deletes everything in it,
+// its code and its password.
+//
+// createGroup, joinGroup, setGroupPassword: called from the app (signed in
+// only) to set up a group, join one with its code and password, or change the
+// password. Everything a group shares lives under groups/{g}/.
 //
 // The browser only ever reads and writes Firestore; it never talks to NGN
 // Market or Anthropic and never sees a key. Keys live only in Secret Manager.
 import { onSchedule } from 'firebase-functions/scheduler';
 import { onDocumentCreated, onDocumentDeleted } from 'firebase-functions/firestore';
+import { onCall, HttpsError } from 'firebase-functions/https';
 import { defineSecret } from 'firebase-functions/params';
 import * as logger from 'firebase-functions/logger';
 import { initializeApp } from 'firebase-admin/app';
@@ -42,6 +49,7 @@ import { runMarketUpdate } from './market.js';
 import { runRiskSummary } from './ai-summary.js';
 import { runAllDigests, DIGEST_TIME_ZONE } from './digest.js';
 import { runTranslation } from './translate.js';
+import { createGroup, joinGroup, setGroupPassword, GroupError } from './groups.js';
 
 const NGN_API_KEY = defineSecret('NGN_API_KEY');
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -109,37 +117,42 @@ export const weeklyDigest = onSchedule(
   },
   async () => {
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value(), maxRetries: 1, timeout: 180000 });
-    // The family overview, then one per household.
-    const result = await runAllDigests({
-      anthropic,
-      store: createFirestoreStore(getFirestore()),
-      now: new Date(),
-      logger,
-    });
-    if (result.kind === 'skip') logger.info('Weekly overview skipped', { reason: result.reason });
+    const db = getFirestore();
+    // Per group: the group's overview, then one per household.
+    const groups = await db.collection('groups').select().get();
+    for (const g of groups.docs) {
+      const result = await runAllDigests({
+        anthropic,
+        store: createFirestoreStore(db, `groups/${g.id}/`),
+        now: new Date(),
+        logger,
+      });
+      if (result.kind === 'skip') logger.info('Weekly overview skipped', { group: g.id, reason: result.reason });
+    }
   },
 );
 
 // Deleting a room in the app removes the room document; its messages are
 // deleted here (the app itself may only delete each person's own messages).
 export const cleanupRoom = onDocumentDeleted(
-  { document: 'rooms/{roomId}', region: 'europe-west3', memory: '256MiB', timeoutSeconds: 300, maxInstances: 1 },
+  { document: 'groups/{groupId}/rooms/{roomId}', region: 'europe-west3', memory: '256MiB', timeoutSeconds: 300, maxInstances: 1 },
   async (event) => {
-    const roomId = event.params.roomId;
+    const { groupId, roomId } = event.params;
     if (roomId === 'familie') return;
     const db = getFirestore();
-    await db.recursiveDelete(db.collection('rooms').doc(roomId).collection('messages'));
-    await deleteTranslations(db, '', roomId);
-    logger.info('Messages of a deleted room removed', { roomId });
+    const group = db.collection('groups').doc(groupId);
+    await db.recursiveDelete(group.collection('rooms').doc(roomId).collection('messages'));
+    await deleteTranslations(group, '', roomId);
+    logger.info('Messages of a deleted room removed', { groupId, roomId });
   },
 );
 
 /** Translations of a deleted room (or of all rooms of a deleted household). */
-async function deleteTranslations(db, household, roomId) {
-  let q = db.collection('translations').where('household', '==', household);
+async function deleteTranslations(group, household, roomId) {
+  let q = group.collection('translations').where('household', '==', household);
   if (roomId) q = q.where('roomId', '==', roomId);
   const snap = await q.get();
-  const writer = db.bulkWriter();
+  const writer = getFirestore().bulkWriter();
   for (const d of snap.docs) writer.delete(d.ref);
   await writer.close();
 }
@@ -147,14 +160,14 @@ async function deleteTranslations(db, household, roomId) {
 // A new translation request: read that one message, ask Claude, store the result.
 export const translateMessage = onDocumentCreated(
   {
-    document: 'translations/{id}', region: 'europe-west3', secrets: [ANTHROPIC_API_KEY],
+    document: 'groups/{groupId}/translations/{id}', region: 'europe-west3', secrets: [ANTHROPIC_API_KEY],
     memory: '256MiB', timeoutSeconds: 120, maxInstances: 3, retry: false,
   },
   async (event) => {
     const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value(), maxRetries: 1, timeout: 60000 });
     await runTranslation({
       anthropic,
-      store: createFirestoreStore(getFirestore()),
+      store: createFirestoreStore(getFirestore(), `groups/${event.params.groupId}/`),
       id: event.params.id,
       request: event.data?.data(),
       now: new Date(),
@@ -164,13 +177,49 @@ export const translateMessage = onDocumentCreated(
 );
 
 export const cleanupHousehold = onDocumentDeleted(
-  { document: 'households/{householdId}', region: 'europe-west3', memory: '256MiB', timeoutSeconds: 300, maxInstances: 1 },
+  { document: 'groups/{groupId}/households/{householdId}', region: 'europe-west3', memory: '256MiB', timeoutSeconds: 300, maxInstances: 1 },
   async (event) => {
-    const { householdId } = event.params;
-    const db = getFirestore();
+    const { groupId, householdId } = event.params;
+    const group = getFirestore().collection('groups').doc(groupId);
     // Deletes every collection below the (already deleted) household document.
-    await db.recursiveDelete(db.collection('households').doc(householdId));
-    await deleteTranslations(db, householdId, '');
-    logger.info('Contents of a deleted household removed', { householdId });
+    await getFirestore().recursiveDelete(group.collection('households').doc(householdId));
+    await deleteTranslations(group, householdId, '');
+    logger.info('Contents of a deleted household removed', { groupId, householdId });
   },
 );
+
+export const cleanupGroup = onDocumentDeleted(
+  { document: 'groups/{groupId}', region: 'europe-west3', memory: '256MiB', timeoutSeconds: 540, maxInstances: 1 },
+  async (event) => {
+    const { groupId } = event.params;
+    const db = getFirestore();
+    await db.recursiveDelete(db.collection('groups').doc(groupId));
+    const code = event.data?.data()?.code;
+    if (typeof code === 'string' && code) await db.doc(`groupCodes/${code}`).delete();
+    await db.doc(`groupSecrets/${groupId}`).delete();
+    logger.info('Contents of a deleted group removed', { groupId });
+  },
+);
+
+// ---------- groups (called from the app) ----------
+
+// App Check stops scripted calls on the live site; the local emulators have none.
+const CALLABLE = {
+  region: 'europe-west3', memory: '256MiB', timeoutSeconds: 30, maxInstances: 5,
+  enforceAppCheck: !process.env.FUNCTIONS_EMULATOR,
+};
+
+/** Runs one group action; clear errors go to the app, others are logged and hidden. */
+const groupCall = (action) => onCall(CALLABLE, async (request) => {
+  try {
+    return await action({ db: getFirestore(), auth: request.auth, data: request.data });
+  } catch (err) {
+    if (err instanceof GroupError) throw new HttpsError(err.code, err.reason);
+    logger.error('Group action failed', { message: err.message });
+    throw new HttpsError('internal', 'failed');
+  }
+});
+
+export const createGroupCall = groupCall(createGroup);
+export const joinGroupCall = groupCall(joinGroup);
+export const setGroupPasswordCall = groupCall(setGroupPassword);

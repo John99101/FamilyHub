@@ -9,14 +9,17 @@
 //   market/risk            { asOf, symbols: [...], portfolio, ... }   risk figures (computed in code)
 //   market/riskSummary     { asOf, en, fr, model, ... }             daily AI summary
 //   marketHistory/{symbol} { symbol, closes: { 'YYYY-MM-DD': price } } (watchlist and $SPX)
-//   config/digest          { enabled }                              weekly overview switch (admins; missing = on)
-//   digest/current         { weekStart, weekEnd, de, en, fr, ... }  weekly overview (read from events, tasks, polls, people)
-//   households/{h}/...     the same for each household (events, tasks, polls, digest/current)
+//
+// One store per group (root = 'groups/{g}/') for the group's own data:
+//   {root}config/digest    { enabled }                              weekly overview switch (admins; missing = on)
+//   {root}digest/current   { weekStart, weekEnd, de, en, fr, ... }  weekly overview (read from events, tasks, polls, people)
+//   {root}households/{h}/... the same for each household (events, tasks, polls, digest/current)
+//   {root}translations/{id}, {root}config/translate                 chat translations
 import { trimCloses } from './market.js';
 
 const toDate = (v) => (v && typeof v.toDate === 'function' ? v.toDate() : v ? new Date(v) : null);
 
-export function createFirestoreStore(db) {
+export function createFirestoreStore(db, root = '') {
   const read = async (path) => {
     const snap = await db.doc(path).get();
     return snap.exists ? snap.data() : null;
@@ -98,7 +101,7 @@ export function createFirestoreStore(db) {
     // ---------- weekly family overview ----------
 
     async getDigestSwitch() {
-      return read('config/digest');
+      return read(`${root}config/digest`);
     },
 
     /**
@@ -109,11 +112,11 @@ export function createFirestoreStore(db) {
       const docs = (snap) => snap.docs.map((d) => d.data());
       // base: '' for the whole family, 'households/{id}/' for one household.
       const [dated, yearly, tasks, polls, people] = await Promise.all([
-        db.collection(`${base}events`).where('date', '>=', from).where('date', '<=', to).get(),
-        db.collection(`${base}events`).where('repeat', '==', 'yearly').get(),
-        db.collection(`${base}tasks`).where('done', '==', false).get(),
-        db.collection(`${base}polls`).where('closed', '==', false).get(),
-        db.collection('people').get(),
+        db.collection(`${root}${base}events`).where('date', '>=', from).where('date', '<=', to).get(),
+        db.collection(`${root}${base}events`).where('repeat', '==', 'yearly').get(),
+        db.collection(`${root}${base}tasks`).where('done', '==', false).get(),
+        db.collection(`${root}${base}polls`).where('closed', '==', false).get(),
+        db.collection(`${root}people`).get(),
       ]);
       return {
         events: [...docs(dated).filter((e) => e.repeat !== 'yearly'), ...docs(yearly)],
@@ -125,20 +128,20 @@ export function createFirestoreStore(db) {
 
     /** Merges, so a failed attempt keeps the last good overview visible. */
     async saveDigest(fields, base = '') {
-      await db.doc(`${base}digest/current`).set(fields, { merge: true });
+      await db.doc(`${root}${base}digest/current`).set(fields, { merge: true });
     },
 
     // ---------- chat translations ----------
 
     async getTranslateSwitch() {
-      return read('config/translate');
+      return read(`${root}config/translate`);
     },
 
     /** The message a translation request points to (family room or household room). */
     async getMessage({ household, roomId, messageId }) {
       const path = household
-        ? `households/${household}/rooms/${roomId}/messages/${messageId}`
-        : `rooms/${roomId}/messages/${messageId}`;
+        ? `${root}households/${household}/rooms/${roomId}/messages/${messageId}`
+        : `${root}rooms/${roomId}/messages/${messageId}`;
       return read(path);
     },
 
@@ -156,11 +159,11 @@ export function createFirestoreStore(db) {
     },
 
     async saveTranslation(id, fields) {
-      await db.doc(`translations/${id}`).set(fields, { merge: true });
+      await db.doc(`${root}translations/${id}`).set(fields, { merge: true });
     },
 
     async listHouseholds() {
-      const snap = await db.collection('households').get();
+      const snap = await db.collection(`${root}households`).get();
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     },
   };

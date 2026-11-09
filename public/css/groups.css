@@ -1,0 +1,116 @@
+/* Groups: sign in with mail, choosing, joining and setting up a group, the
+   group page and the look editor. Colors come from the variables in app.css,
+   which follow the open group's look. */
+
+/* ---------- sign in with mail, confirm the mail, the group list ---------- */
+
+.signin-mail { width: 100%; max-width: 360px; }
+.screen-center .signin-mail p { max-width: none; }
+.start-or { color: var(--muted); font-size: 14px; margin: 8px 0 12px; }
+.start-form { text-align: left; }
+.start-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin: 10px 0 0; }
+
+.screen-start { min-height: 100%; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); }
+.start-panel { width: 100%; max-width: 520px; margin: 0 auto; text-align: left; }
+.start-panel > h1 { margin: 0 0 6px; font-size: 26px; }
+.start-panel > p { margin: 0 0 14px; }
+.start-panel > .btn, .start-panel > .btn-link { margin: 4px 0 12px; }
+.screen-center .start-panel { text-align: center; }
+.screen-center .start-panel p { max-width: none; }
+
+.group-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.group-pick {
+  width: 100%; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); text-align: left;
+}
+.group-pick:hover { border-color: var(--primary); }
+.group-pick-icon { font-size: 26px; line-height: 1; }
+.group-pick-name { flex: 1; min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+
+.group-code {
+  font: 700 26px/1.2 ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: 2px;
+  color: var(--primary); margin: 4px 0 12px; overflow-wrap: anywhere;
+}
+.button-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+
+/* ---------- forms ---------- */
+
+.form-stack { display: flex; flex-direction: column; gap: 8px; }
+.form-stack input[type="text"], .form-stack input[type="email"], .form-stack input[type="password"] {
+  width: 100%; min-height: 44px; padding: 8px 12px;
+  border-radius: 12px; border: 1px solid var(--border); background: var(--bg);
+}
+.form-stack input:focus { outline: none; border-color: var(--primary); }
+.form-stack meter { width: 100%; height: 10px; }
+.form-stack .muted.small { margin: 0; }
+.form-hint { color: var(--danger); font-size: 14px; margin: 0; min-height: 1em; }
+
+.form-section { border: 0; padding: 0; margin: 10px 0 0; min-width: 0; }
+.form-section legend { font-weight: 700; padding: 0; margin-bottom: 6px; }
+.form-section > .muted.small { margin: 0 0 8px; }
+.form-section input[type="range"] { width: 100%; accent-color: var(--primary); }
+
+/* Radio rows: the input stays for the keyboard and screen readers, the face is what you see. */
+.choice-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.choice { position: relative; cursor: pointer; }
+.choice input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.choice-face {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 6px 14px;
+  border: 2px solid var(--border); border-radius: 12px; background: var(--surface); font-weight: 600;
+}
+.choice input:checked + .choice-face { border-color: var(--primary); background: var(--bubble-own); }
+.choice input:focus-visible + .choice-face { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.icon-row .choice-face { width: 48px; height: 48px; padding: 0; }
+.icon-face { font-size: 26px; line-height: 1; }
+
+.theme-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.theme-row .choice-face { width: 100%; justify-content: flex-start; padding: 0; overflow: hidden; }
+.theme-face { display: flex; align-items: center; gap: 6px; width: 100%; padding: 10px 12px; background: var(--tb); color: #16191d; }
+.theme-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--td); flex: none; }
+.theme-name { margin-left: 4px; }
+
+.color-line { margin-bottom: 10px; }
+.swatch-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.swatch { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--border); background: var(--sw); padding: 0; }
+.swatch-row input[type="color"] { width: 44px; height: 36px; padding: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+
+.pattern-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+.pattern-row .choice-face { width: 100%; padding: 0; overflow: hidden; }
+.pattern-face {
+  display: flex; align-items: flex-end; width: 100%; height: 64px; padding: 6px 8px;
+  background-color: var(--pb); background-image: var(--pi); color: #16191d; font-size: 13px;
+}
+
+.font-face.font-round { font-family: ui-rounded, "SF Pro Rounded", Nunito, "Varela Round", "Arial Rounded MT Bold", system-ui, sans-serif; }
+.font-face.font-classic { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; }
+.font-face.font-hand { font-family: "Segoe Print", "Bradley Hand", "Chalkboard SE", "Comic Sans MS", cursive; }
+
+.card-order { list-style: none; margin: 8px 0 0; padding: 0; }
+.card-order-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  padding: 4px 0; border-bottom: 1px solid var(--border);
+}
+
+.switch-list { display: flex; flex-direction: column; gap: 4px; }
+.switch-list .switch-row { align-items: flex-start; margin-bottom: 4px; }
+.switch-list .switch-row input { flex: none; margin-top: 2px; }
+.switch-sub { display: block; font-weight: 400; }
+
+/* ---------- the wizard ---------- */
+
+.wizard { padding-bottom: 80px; }
+.step-dots { display: flex; gap: 6px; list-style: none; margin: 4px 0 14px; padding: 0; }
+.step-dots li { flex: 1; height: 6px; border-radius: 3px; background: var(--border); }
+.step-dots li.done { background: var(--accent); }
+.wizard-buttons {
+  position: sticky; bottom: 0; display: flex; justify-content: space-between; gap: 8px;
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); background: var(--bg);
+}
+.wizard-summary { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 12px; }
+.wizard-summary dt { font-weight: 700; }
+.wizard-summary dd { margin: 0; overflow-wrap: anywhere; }
+
+/* ---------- start page ---------- */
+
+.home-welcome { margin: 2px 0 0; font-weight: 600; color: var(--primary); overflow-wrap: anywhere; }

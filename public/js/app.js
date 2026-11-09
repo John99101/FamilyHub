@@ -1,11 +1,15 @@
-// FamilyHub main script: sign in, allow list check, navigation, and starting
-// the pages once someone on the allow list is signed in.
+// FamilyHub main script: sign in (Google, or mail and password), choosing a
+// group, navigation, and starting the pages once the person is in the group.
 import {
   auth, db, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
-  onAuthStateChanged, signOut, doc, onSnapshot,
+  onAuthStateChanged, signOut, doc, collection, getDoc, onSnapshot,
 } from './firebase.js';
 import { $, toast } from './ui.js';
 import { t, translatePage } from './i18n.js';
+import { activeGroup, setActiveGroup } from './scope.js';
+import { applyDesign, storedDesign, featureOn } from './design.js';
+import { setupMailSignIn, showVerify, showGroups } from './start.js';
+import { createGroupPage } from './group-page.js';
 import { createChat } from './chat.js';
 import { createSettings, updateThemeColor } from './settings.js';
 import { createMarketData } from './market-data.js';
@@ -26,16 +30,19 @@ import { createQuestionPage } from './question-page.js';
 import { createTree } from './tree.js';
 import { isSimpleMode, SIMPLE_ROUTES } from './simple.js';
 
-export const APP_VERSION = '1.4.1';
+export const APP_VERSION = '1.5.0';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();
+
+// The look of the group used last on this device, until the group itself is read.
+applyDesign(storedDesign(), { keep: false });
 
 // Simple mode (big text, only the essentials) is chosen per device.
 const SIMPLE = isSimpleMode();
 document.documentElement.classList.toggle('simple', SIMPLE);
 
-const SCREENS = ['loading', 'signin', 'noaccess', 'app'];
+const SCREENS = ['loading', 'signin', 'verify', 'groups', 'app'];
 // tab: which tab is highlighted; back: a page under "Mehr" (shows a back link).
 const ROUTES = {
   start: { title: 'nav.home', view: 'view-home', page: 'home', tab: 'start' },
@@ -43,6 +50,7 @@ const ROUTES = {
   kalender: { title: 'nav.calendar', view: 'view-calendar', page: 'calendar', tab: 'kalender' },
   aufgaben: { title: 'nav.tasks', view: 'view-tasks', page: 'tasks', tab: 'aufgaben' },
   mehr: { title: 'nav.more', view: 'view-more', tab: 'mehr' },
+  gruppe: { title: 'nav.group', view: 'view-group', page: 'group', tab: 'mehr', back: true },
   familie: { title: 'nav.family', view: 'view-family', page: 'family', tab: 'mehr', back: true },
   pinnwand: { title: 'nav.board', view: 'view-board', page: 'board', tab: 'mehr', back: true },
   reisen: { title: 'nav.trips', view: 'view-trips', page: 'trips', tab: 'mehr', back: true },
@@ -56,10 +64,16 @@ const ROUTES = {
   risiko: { title: 'nav.risk', view: 'view-risk', page: 'risk', tab: 'mehr', back: true },
   einstellungen: { title: 'nav.settings', view: 'view-settings', page: 'settings', tab: 'mehr', back: true },
 };
+// The group page switch each route belongs to (a switched off page leads to the start page).
+const ROUTE_FEATURE = {
+  chat: 'chat', kalender: 'calendar', aufgaben: 'tasks', umfragen: 'polls', reisen: 'trips', pinnwand: 'board',
+  stammbaum: 'tree', frage: 'question', rezepte: 'recipes', kontakte: 'contacts', wetter: 'weather', boerse: 'markets', risiko: 'markets',
+};
 
-let session = null;   // { user, claims, mail, access, isAdmin }
-let stopAccess = null;
-let pages = null;     // all pages, created once access is confirmed
+// { user, claims, mail, groupId, group, members, access: { members, admins }, isAdmin, markets, marketUser, marketAdmin }
+let session = null;
+let stops = [];       // listeners of the open group
+let pages = null;     // all pages, created once the group is read
 let familyData = null;
 let marketData = null;
 let currentPage = null;
@@ -70,8 +84,8 @@ function showScreen(name) {
 }
 
 function teardown() {
-  if (stopAccess) stopAccess();
-  stopAccess = null;
+  for (const stop of stops) stop();
+  stops = [];
   if (pages) for (const page of Object.values(pages)) page.stop();
   if (familyData) familyData.stop();
   if (marketData) marketData.stop();
@@ -113,22 +127,23 @@ async function doSignOut() {
 }
 
 $('btn-signin').addEventListener('click', signIn);
-$('btn-noaccess-signout').addEventListener('click', doSignOut);
+setupMailSignIn();
 
 getRedirectResult(auth).catch((err) => {
   console.warn('Redirect sign in failed', err.code);
   $('signin-error').textContent = t('signin.failed');
 });
 
-// ---------- access check ----------
-// The allow list (config/access) can only be read by people who are on it.
-// So: reading it works → member. Reading it is refused → "Kein Zugang" (no access).
+onAuthStateChanged(auth, (user) => { openSession(user); });
 
-onAuthStateChanged(auth, async (user) => {
+async function openSession(user) {
   const round = ++authRound;
   teardown();
-  if (!user) {
-    showScreen('signin');
+  if (!user) { outsideGroup('signin'); return; }
+  // Mail and password: only after the mail is confirmed (Google mails always are).
+  if (!user.emailVerified) {
+    outsideGroup('verify');
+    showVerify(user, { onConfirmed: openSession, onSignOut: doSignOut });
     return;
   }
   showScreen('loading');
@@ -137,40 +152,131 @@ onAuthStateChanged(auth, async (user) => {
     claims = (await user.getIdTokenResult()).claims;
   } catch (err) {
     console.warn('Token failed', err.code);
-    showScreen('noaccess');
+    showScreen('signin');
     return;
   }
   if (round !== authRound) return;
+  session = {
+    user, claims, mail: (user.email || '').toLowerCase(), groupId: activeGroup(), group: null, members: [],
+    access: { members: [], admins: [] }, isAdmin: false, markets: false, marketUser: false, marketAdmin: false,
+  };
+  if (session.groupId) openGroup(round);
+  else pickGroup();
+}
 
-  session = { user, claims, mail: (user.email || '').toLowerCase(), access: null, isAdmin: false };
-  stopAccess = onSnapshot(doc(db, 'config', 'access'), (snap) => {
-    if (!session) return;
-    const wasAdmin = session.isAdmin;
-    session.access = snap.data() || { members: [], admins: [] };
-    session.isAdmin = Array.isArray(session.access.admins) && session.access.admins.includes(session.mail);
+/** Screens outside a group (sign in, mail check, group list, wizard) get the usual look and title. */
+function outsideGroup(screen) {
+  applyDesign({}, { keep: false });
+  document.title = 'FamilyHub';
+  showScreen(screen);
+}
+
+function pickGroup() {
+  outsideGroup('groups');
+  showGroups(session, { onOpen: switchTo, onSignOut: doSignOut });
+}
+
+/** Opens another group (or the group list with ''): a fresh start, so nothing of the old group remains. */
+function switchTo(groupId) {
+  setActiveGroup(groupId);
+  location.hash = '#/start';
+  location.reload();
+}
+
+// ---------- the open group ----------
+// Members read their group; for anyone else every read is refused. So a
+// refused read means: removed from the group, or the group is gone.
+
+function openGroup(round) {
+  const { uid } = session.user;
+  const g = session.groupId;
+  const loaded = { member: false, group: false, members: false, markets: false };
+  let lost = false;
+
+  const leave = (err) => {
+    if (lost || round !== authRound) return;
+    lost = true;
+    console.warn('Group not available', err?.code || 'not a member');
+    switchTo('');
+  };
+
+  const ready = (key) => {
+    loaded[key] = true;
+    if (round !== authRound || lost) return;
     if (!pages) {
-      startApp();
-    } else {
-      pages.settings.update();
-      if (wasAdmin !== session.isAdmin) {
-        pages.chat.onRoleChange();
-        pages.contacts.onRoleChange();
-        pages.family.onRoleChange();
-      }
+      if (Object.values(loaded).every(Boolean)) startApp();
+      return;
     }
-  }, (err) => {
-    console.warn('Access check failed', err.code);
-    teardown();
-    showScreen('noaccess');
-  });
-});
+    groupChanged();
+  };
+
+  stops.push(onSnapshot(doc(db, 'groups', g, 'members', uid), (snap) => {
+    if (!snap.exists()) { leave(); return; }
+    const wasAdmin = session.isAdmin;
+    session.isAdmin = snap.data().role === 'admin';
+    ready('member');
+    if (pages && wasAdmin !== session.isAdmin) {
+      pages.chat.onRoleChange();
+      pages.contacts.onRoleChange();
+      pages.family.onRoleChange();
+    }
+  }, leave));
+
+  stops.push(onSnapshot(doc(db, 'groups', g), (snap) => {
+    if (!snap.exists()) { leave(); return; }
+    session.group = snap.data();
+    applyDesign(session.group.design || {});
+    ready('group');
+  }, leave));
+
+  stops.push(onSnapshot(collection(db, 'groups', g, 'members'), (snap) => {
+    session.members = snap.docs.map((d) => ({ uid: d.id, ...d.data() }));
+    const mails = (role) => session.members.filter((m) => m.role === role && typeof m.mail === 'string').map((m) => m.mail);
+    session.access = { admins: mails('admin'), members: mails('member') };
+    ready('members');
+  }, leave));
+
+  // Market access belongs to the person, not the group (phase 3 adds an unlock code).
+  getDoc(doc(db, 'marketAccess', uid)).then((snap) => {
+    session.marketUser = snap.exists();
+    session.marketAdmin = snap.exists() && snap.data().admin === true;
+  }).catch((err) => console.warn('Reading market access failed', err.code))
+    .finally(() => ready('markets'));
+}
+
+function routeOn(name) {
+  const feature = ROUTE_FEATURE[name];
+  if (!feature) return true;
+  if (feature === 'markets') return session.markets;
+  return featureOn(session.group, feature);
+}
+
+/** Shows the group's name, and only the tabs and tiles of its pages. */
+function showGroupFrame() {
+  session.markets = featureOn(session.group, 'markets') && session.marketUser;
+  $('app-name').textContent = `${session.group.icon || ''} ${session.group.name || ''}`.trim();
+  for (const link of document.querySelectorAll('.tab[data-route], .tile[href^="#/"]')) {
+    const name = link.dataset.route || link.getAttribute('href').slice(2);
+    link.hidden = !routeOn(name);
+  }
+}
+
+function groupChanged() {
+  showGroupFrame();
+  pages.settings.update();
+  pages.group.update();
+  pages.home.update();
+  const name = location.hash.replace(/^#\/?/, '');
+  if (ROUTES[name] && !routeOn(name)) location.hash = '#/start';
+}
 
 // ---------- app ----------
 
 function startApp() {
   showScreen('app');
+  showGroupFrame();
   familyData = createFamilyData(session);
-  marketData = createMarketData();
+  marketData = createMarketData(session.markets);
   const weather = createWeather(familyData);
   const calendar = createCalendar(familyData);
   const tasks = createTasks(familyData);
@@ -191,6 +297,7 @@ function startApp() {
     markets: createMarkets(marketData),
     risk: createRiskPage(marketData),
     settings: createSettings(session, { onSignOut: doSignOut, marketData, familyData }),
+    group: createGroupPage(session, { onSwitch: () => switchTo('') }),
   };
   pages.home = createHome(familyData, { calendar, tasks, chat, weather, board: pages.board, trips: pages.trips });
   calendar.setTripOpener((path) => { location.hash = '#/reisen'; pages.trips.open(path); });
@@ -202,6 +309,7 @@ function route() {
   let name = location.hash.replace(/^#\/?/, '');
   if (!ROUTES[name]) name = 'start';
   if (SIMPLE && !SIMPLE_ROUTES.has(name)) name = 'start';
+  if (!routeOn(name)) name = 'start';
   const r = ROUTES[name];
   for (const [key, other] of Object.entries(ROUTES)) $(other.view).hidden = key !== name;
   for (const tab of document.querySelectorAll('.tab')) {
@@ -211,7 +319,7 @@ function route() {
   $('back-link').hidden = !r.back;
   const title = t(r.title);
   $('view-title').textContent = title;
-  document.title = `${title} · FamilyHub`;
+  document.title = `${title} · ${session.group.name || 'FamilyHub'}`;
   const page = r.page ? pages[r.page] : null;
   if (currentPage && currentPage !== page && currentPage.onHide) currentPage.onHide();
   currentPage = page;

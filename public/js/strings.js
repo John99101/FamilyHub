@@ -7,6 +7,7 @@
 import { FAMILY_STRINGS } from './strings-family.js';
 import { HOUSE_STRINGS } from './strings-house.js';
 import { MORE_STRINGS } from './strings-more.js';
+import { GROUP_STRINGS } from './strings-groups.js';
 
 const BASE = {
   de: {
@@ -18,10 +19,9 @@ const BASE = {
     'common.saveFailed': 'Speichern hat nicht geklappt. Bitte erneut versuchen.',
     'common.offline': 'Keine Verbindung. Bitte später erneut versuchen.',
 
-    'signin.tagline': 'Der private Bereich unserer Familie.',
+    'signin.tagline': 'Dein privater Bereich für Familie und Freunde.',
     'signin.button': 'Mit Google anmelden',
     'signin.failed': 'Anmeldung hat nicht geklappt. Bitte erneut versuchen.',
-    'noaccess.title': 'Kein Zugang',
 
     'nav.label': 'Hauptnavigation',
     'nav.chat': 'Chat',
@@ -148,21 +148,13 @@ const BASE = {
     'settings.usageReset': 'Neues Kontingent ab {time}.',
     'settings.usageLastRun': 'Letzter Lauf: {time}.',
     'settings.usageNone': 'Noch kein Abruf gelaufen.',
-    'settings.access': 'Zugang',
-    'settings.accessHint': 'Nur diese Mailadressen können sich anmelden. Es muss die Mailadresse des Google Kontos sein. Admins dürfen diese Liste ändern und jede Chatnachricht löschen.',
-    'settings.accessAddLabel': 'Mailadresse hinzufügen',
     'settings.you': '(du)',
     'settings.adminBadge': 'Admin',
     'settings.revokeAdmin': 'Adminrechte entziehen',
     'settings.adminRevoked': 'Adminrechte entzogen',
     'settings.makeAdmin': 'Zum Admin machen',
     'settings.adminAdded': 'Neuer Admin gespeichert',
-    'settings.confirmRemove': '{mail} entfernen? Diese Person kann sich danach nicht mehr anmelden.',
-    'settings.removed': 'Zugang entfernt',
     'settings.mailInvalid': 'Bitte eine gültige Mailadresse eingeben.',
-    'settings.mailDuplicate': 'Diese Mailadresse ist schon in der Liste.',
-    'settings.listFull': 'Die Liste ist voll (höchstens {max} Mitglieder).',
-    'settings.mailAdded': 'Mailadresse hinzugefügt',
     'settings.notes': 'Hinweise',
     'settings.notE2E': 'Chatnachrichten sind nicht Ende zu Ende verschlüsselt.',
     'settings.storage': 'Die Nachrichten speichert Google Firebase in Frankfurt.',
@@ -178,10 +170,9 @@ const BASE = {
     'common.saveFailed': 'Saving did not work. Please try again.',
     'common.offline': 'No connection. Please try again later.',
 
-    'signin.tagline': 'Our family’s private space.',
+    'signin.tagline': 'Your private space for family and friends.',
     'signin.button': 'Sign in with Google',
     'signin.failed': 'Sign in did not work. Please try again.',
-    'noaccess.title': 'No access',
 
     'nav.label': 'Main navigation',
     'nav.chat': 'Chat',
@@ -308,21 +299,13 @@ const BASE = {
     'settings.usageReset': 'New quota from {time}.',
     'settings.usageLastRun': 'Last run: {time}.',
     'settings.usageNone': 'No update has run yet.',
-    'settings.access': 'Access',
-    'settings.accessHint': 'Only these mail addresses can sign in. It must be the mail address of the Google account. Admins can change this list and delete any chat message.',
-    'settings.accessAddLabel': 'Add mail address',
     'settings.you': '(you)',
     'settings.adminBadge': 'Admin',
     'settings.revokeAdmin': 'Remove admin rights',
     'settings.adminRevoked': 'Admin rights removed',
     'settings.makeAdmin': 'Make admin',
     'settings.adminAdded': 'New admin saved',
-    'settings.confirmRemove': 'Remove {mail}? This person will no longer be able to sign in.',
-    'settings.removed': 'Access removed',
     'settings.mailInvalid': 'Please enter a valid mail address.',
-    'settings.mailDuplicate': 'This mail address is already on the list.',
-    'settings.listFull': 'The list is full (at most {max} members).',
-    'settings.mailAdded': 'Mail address added',
     'settings.notes': 'Notes',
     'settings.notE2E': 'Chat messages are not end to end encrypted.',
     'settings.storage': 'Messages are stored by Google Firebase in Frankfurt.',
@@ -338,10 +321,9 @@ const BASE = {
     'common.saveFailed': 'L’enregistrement n’a pas fonctionné. Réessaie.',
     'common.offline': 'Pas de connexion. Réessaie plus tard.',
 
-    'signin.tagline': 'L’espace privé de notre famille.',
+    'signin.tagline': 'Ton espace privé pour la famille et les amis.',
     'signin.button': 'Se connecter avec Google',
     'signin.failed': 'La connexion n’a pas fonctionné. Réessaie.',
-    'noaccess.title': 'Pas d’accès',
 
     'nav.label': 'Navigation principale',
     'nav.chat': 'Discussion',
@@ -468,21 +450,13 @@ const BASE = {
     'settings.usageReset': 'Nouveau quota à partir du {time}.',
     'settings.usageLastRun': 'Dernière exécution : {time}.',
     'settings.usageNone': 'Aucune mise à jour n’a encore eu lieu.',
-    'settings.access': 'Accès',
-    'settings.accessHint': 'Seules ces adresses mail peuvent se connecter. Il doit s’agir de l’adresse mail du compte Google. Les administrateurs peuvent modifier cette liste et supprimer tout message.',
-    'settings.accessAddLabel': 'Ajouter une adresse mail',
     'settings.you': '(toi)',
     'settings.adminBadge': 'Admin',
     'settings.revokeAdmin': 'Retirer les droits admin',
     'settings.adminRevoked': 'Droits admin retirés',
     'settings.makeAdmin': 'Nommer admin',
     'settings.adminAdded': 'Nouvel admin enregistré',
-    'settings.confirmRemove': 'Retirer {mail} ? Cette personne ne pourra plus se connecter.',
-    'settings.removed': 'Accès retiré',
     'settings.mailInvalid': 'Saisis une adresse mail valide.',
-    'settings.mailDuplicate': 'Cette adresse mail est déjà dans la liste.',
-    'settings.listFull': 'La liste est pleine (au plus {max} membres).',
-    'settings.mailAdded': 'Adresse mail ajoutée',
     'settings.notes': 'Remarques',
     'settings.notE2E': 'Les messages ne sont pas chiffrés de bout en bout.',
     'settings.storage': 'Les messages sont stockés par Google Firebase à Francfort.',
@@ -492,5 +466,5 @@ const BASE = {
 
 // The family hub texts live in strings-family.js and strings-house.js and are merged in here.
 export const STRINGS = Object.fromEntries(
-  Object.keys(BASE).map((lang) => [lang, { ...BASE[lang], ...FAMILY_STRINGS[lang], ...HOUSE_STRINGS[lang], ...MORE_STRINGS[lang] }]),
+  Object.keys(BASE).map((lang) => [lang, { ...BASE[lang], ...FAMILY_STRINGS[lang], ...HOUSE_STRINGS[lang], ...MORE_STRINGS[lang], ...GROUP_STRINGS[lang] }]),
 );

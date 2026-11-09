@@ -1,16 +1,13 @@
-// Settings: account, language, light or dark look, the family watchlist, and
-// (admins only) the market and AI switches and the allow list.
-import { db, doc, setDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from './firebase.js';
+// Settings: account, language, light or dark look, the watchlist and the
+// market switches (people with market access), and the group's AI switches
+// (group admins). Who is in the group is on the group page.
+import { db, doc, setDoc, serverTimestamp, arrayUnion, arrayRemove } from './firebase.js';
 import { $, el, avatar, toast, formatDateTime } from './ui.js';
 import { SYMBOL_PATTERN, WATCHLIST_MAX, findQuote, toDate } from './market-data.js';
-import { t, locale, languageChoice, setLanguageChoice } from './i18n.js';
+import { t, languageChoice, setLanguageChoice } from './i18n.js';
 import { isSimpleMode, setSimpleMode } from './simple.js';
 
 const THEME_KEY = 'familyhub-theme';
-const MAX_MEMBERS = 100;
-const MAX_ADMINS = 20;
-// Same check as validMailList in firestore.rules (after lower casing).
-const MAIL_PATTERN = /^[a-z0-9._%+'-]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/;
 
 // ---------- appearance (stored on this device only) ----------
 
@@ -34,14 +31,6 @@ export function updateThemeColor() {
 // ---------- settings page ----------
 
 export function createSettings(session, { onSignOut, marketData, familyData }) {
-  const accessRef = doc(db, 'config', 'access');
-  const card = $('card-access');
-  const listBox = $('access-list');
-  const form = $('access-form');
-  const input = $('access-input');
-  const error = $('access-error');
-  let busy = false;
-
   // Account
   const name = session.user.displayName || session.claims.name || '';
   $('account-avatar').replaceChildren(avatar(name, session.user.photoURL || session.claims.picture, true));
@@ -64,81 +53,9 @@ export function createSettings(session, { onSignOut, marketData, familyData }) {
 
   $('btn-signout').onclick = onSignOut;
 
-  // Allow list (admins only)
-  function people() {
-    const admins = new Set(session.access.admins || []);
-    const members = new Set(session.access.members || []);
-    const all = [...new Set([...admins, ...members])];
-    all.sort((a, b) => (admins.has(b) - admins.has(a)) || a.localeCompare(b, locale));
-    return all.map((mail) => ({ mail, admin: admins.has(mail), me: mail === session.mail }));
-  }
+  // ---------- watchlist (everyone with market access) ----------
 
-  async function save(change, okText) {
-    if (busy) return;
-    busy = true;
-    error.textContent = '';
-    try {
-      await updateDoc(accessRef, { ...change, updatedAt: serverTimestamp(), updatedBy: session.mail });
-      if (okText) toast(okText);
-    } catch (err) {
-      console.warn('Saving the allow list failed', err.code);
-      error.textContent = t('common.saveFailed');
-    } finally {
-      busy = false;
-    }
-  }
-
-  function renderAccess() {
-    card.hidden = !session.isAdmin;
-    if (!session.isAdmin) { listBox.replaceChildren(); return; }
-    const adminCount = (session.access.admins || []).length;
-    listBox.replaceChildren(...people().map((p) => {
-      const actions = el('div', { class: 'person-actions' });
-      if (p.admin && !p.me) {
-        actions.append(el('button', {
-          class: 'btn-link', type: 'button', text: t('settings.revokeAdmin'),
-          onclick: () => save({ admins: arrayRemove(p.mail), members: arrayUnion(p.mail) }, t('settings.adminRevoked')),
-        }));
-      }
-      if (!p.admin) {
-        actions.append(el('button', {
-          class: 'btn-link', type: 'button', text: t('settings.makeAdmin'), disabled: adminCount >= MAX_ADMINS,
-          onclick: () => save({ admins: arrayUnion(p.mail), members: arrayRemove(p.mail) }, t('settings.adminAdded')),
-        }));
-      }
-      if (!p.me) {
-        actions.append(el('button', {
-          class: 'btn-link danger', type: 'button', text: t('common.remove'),
-          onclick: () => {
-            if (!confirm(t('settings.confirmRemove', { mail: p.mail }))) return;
-            save({ admins: arrayRemove(p.mail), members: arrayRemove(p.mail) }, t('settings.removed'));
-          },
-        }));
-      }
-      return el('li', { class: 'person' }, [
-        el('span', { class: 'person-mail' }, [
-          p.mail,
-          p.me ? el('span', { class: 'muted', text: ` ${t('settings.you')}` }) : null,
-          p.admin ? el('span', { class: 'badge', text: t('settings.adminBadge') }) : null,
-        ]),
-        actions,
-      ]);
-    }));
-  }
-
-  form.onsubmit = (event) => {
-    event.preventDefault();
-    const mail = input.value.trim().toLowerCase();
-    error.textContent = '';
-    if (!MAIL_PATTERN.test(mail)) { error.textContent = t('settings.mailInvalid'); return; }
-    if (people().some((p) => p.mail === mail)) { error.textContent = t('settings.mailDuplicate'); return; }
-    if ((session.access.members || []).length >= MAX_MEMBERS) { error.textContent = t('settings.listFull', { max: MAX_MEMBERS }); return; }
-    save({ members: arrayUnion(mail) }, t('settings.mailAdded')).then(() => {
-      if (!error.textContent) input.value = '';
-    });
-  };
-
-  // ---------- watchlist (all members) ----------
+  $('card-watchlist').hidden = !session.markets;
 
   const watchRef = doc(db, 'config', 'watchlist');
   const watchList = $('watch-list');
@@ -187,7 +104,7 @@ export function createSettings(session, { onSignOut, marketData, familyData }) {
     if (await saveWatch(arrayUnion(symbol), t('settings.symbolAdded', { symbol }))) watchInput.value = '';
   };
 
-  // ---------- market and AI switches, API usage (admins only) ----------
+  // ---------- market and AI switches, API usage (market admins only) ----------
 
   const marketCard = $('card-market-admin');
   const marketSwitch = $('market-switch');
@@ -226,8 +143,8 @@ export function createSettings(session, { onSignOut, marketData, familyData }) {
   };
 
   function renderMarketAdmin(state) {
-    marketCard.hidden = !session.isAdmin;
-    if (!session.isAdmin) return;
+    marketCard.hidden = !(session.markets && session.marketAdmin);
+    if (marketCard.hidden) return;
     marketSwitch.checked = state.switch?.enabled !== false;
     aiSwitch.checked = state.switch?.aiEnabled !== false;
     const s = state.status;
@@ -244,7 +161,7 @@ export function createSettings(session, { onSignOut, marketData, familyData }) {
     }
   }
 
-  // ---------- weekly overview switch (admins only; missing counts as on) ----------
+  // ---------- weekly overview and translation switches (group admins; missing counts as on) ----------
 
   const digestCard = $('card-digest-admin');
   const digestSwitch = $('digest-switch');
@@ -287,13 +204,12 @@ export function createSettings(session, { onSignOut, marketData, familyData }) {
   simpleSwitch.checked = isSimpleMode();
   simpleSwitch.onchange = () => setSimpleMode(simpleSwitch.checked);
 
-  renderAccess();
   const stopMarket = marketData.subscribe((state) => { renderWatch(state); renderMarketAdmin(state); });
   const stopFamily = familyData.subscribe(renderDigestAdmin);
 
   return {
     update() {
-      renderAccess();
+      $('card-watchlist').hidden = !session.markets;
       renderMarketAdmin(marketData.state);
       renderDigestAdmin(familyData.state);
     },

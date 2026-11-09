@@ -17,6 +17,7 @@ import { tripStatus, tripRange } from './trips.js';
 import { questionFor } from './questions.js';
 import { telHref } from './contacts.js';
 import { isSimpleMode, setSimpleMode } from './simple.js';
+import { featureOn, homeCards } from './design.js';
 
 const NEXT_DAYS = 7;
 const BIRTHDAY_DAYS = 30;
@@ -29,10 +30,26 @@ function greeting(name) {
 
 const link = (href, text) => el('a', { class: 'btn-link', href, text });
 
+// The group page each start card belongs to (the overview is always there).
+const CARD_FEATURE = {
+  notices: 'board', days: 'calendar', birthdays: 'calendar', trips: 'trips', tasks: 'tasks',
+  question: 'question', polls: 'polls', chat: 'chat', weather: 'weather',
+};
+
 export function createHome(data, pages) {
   const root = $('home-content');
   const session = data.session;
   let visible = false;
+  const on = (card) => !CARD_FEATURE[card] || featureOn(session.group, CARD_FEATURE[card]);
+
+  function hello(name) {
+    const welcome = session.group?.design?.welcome;
+    return el('div', { class: 'home-hello' }, [
+      el('p', { class: 'home-greeting', text: greeting(name) }),
+      welcome ? el('p', { class: 'home-welcome', text: welcome }) : null,
+      el('p', { class: 'muted', text: formatWeekdayDay(todayIso()) }),
+    ]);
+  }
 
   // The family's overview, and one for each household this person is in.
   function digestCards() {
@@ -214,15 +231,12 @@ export function createHome(data, pages) {
       .map(([c, href]) => el('a', { class: 'call-btn', href }, [el('span', { class: 'call-name', text: c.name }), el('span', { class: 'call-number', text: c.phone })]));
     const rooms = data.state.rooms.filter((r) => r.last && r.last.text).slice(0, 3);
     root.replaceChildren(...[
-      el('div', { class: 'home-hello' }, [
-        el('p', { class: 'home-greeting', text: greeting(name) }),
-        el('p', { class: 'muted', text: formatWeekdayDay(todayIso()) }),
-      ]),
-      noticesCard(),
+      hello(name),
+      on('notices') ? noticesCard() : null,
       simpleDay(todayIso(), t('day.today')),
       simpleDay(addDays(todayIso(), 1), t('day.tomorrow')),
       card(t('simple.call'), calls.length ? el('div', { class: 'call-grid' }, calls) : emptyNote(t('simple.noCalls'))),
-      card(t('home.chat'), [
+      on('chat') && card(t('home.chat'), [
         rooms.length ? el('ul', { class: 'simple-list' }, rooms.map((r) => el('li', {}, [
           el('span', { class: 'simple-main', text: r.id === 'familie' ? t('rooms.main') : r.name }),
           el('span', { class: 'room-line-text', text: `${r.last.uid === session.user.uid ? t('home.you') : data.shortNameForUid(r.last.uid, r.last.name)}: ${r.last.text}` }),
@@ -236,20 +250,21 @@ export function createHome(data, pages) {
   function render() {
     const name = data.myDisplayName() || firstName(myName(session));
     if (isSimpleMode()) { renderSimple(name); return; }
-    root.replaceChildren(
-      el('div', { class: 'home-hello' }, [
-        el('p', { class: 'home-greeting', text: greeting(name) }),
-        el('p', { class: 'muted', text: formatWeekdayDay(todayIso()) }),
-      ]),
-      ...[noticesCard(), ...digestCards(), nextDaysCard(), birthdaysCard(), tripsCard(), tasksCard(), questionCard(), pollsCard(), chatCard(), weatherCard()].filter(Boolean),
-    );
+    const build = {
+      notices: noticesCard, digest: digestCards, days: nextDaysCard, birthdays: birthdaysCard, trips: tripsCard,
+      tasks: tasksCard, question: questionCard, polls: pollsCard, chat: chatCard, weather: weatherCard,
+    };
+    // The cards the group chose, in its order, for the pages it uses.
+    const cards = homeCards(session.group?.design).filter(on).flatMap((c) => build[c]());
+    root.replaceChildren(hello(name), ...cards.filter(Boolean));
   }
 
   const stopData = data.subscribe(() => { if (visible) render(); });
   const stopWeather = pages.weather.subscribe(() => { if (visible) render(); });
 
   return {
-    onShow() { visible = true; render(); pages.weather.ensureFresh(); },
+    onShow() { visible = true; render(); if (on('weather')) pages.weather.ensureFresh(); },
+    update() { if (visible) render(); },
     onHide() { visible = false; },
     stop() { stopData(); stopWeather(); if (stopQuick) stopQuick(); root.replaceChildren(); },
   };

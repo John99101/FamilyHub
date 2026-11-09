@@ -1,11 +1,31 @@
 # FamilyHub
 
-A small private website for the family (about 5 to 15 people), usable on
-computers and phones and installable as an app. The app is in German, English
-and French (it follows the browser; changeable in the settings).
+A small private website for families and other groups (about 5 to 15 people
+each), usable on computers and phones and installable as an app. The app is
+in German, English and French (it follows the browser; changeable in the
+settings).
 
-- **Sign in with Google only.** Only mail addresses on an allow list get in;
-  everyone else sees "Kein Zugang".
+- **Sign in with Google, or with mail and password** (the mail must be
+  confirmed first; "Passwort vergessen" sends a reset link).
+- **Groups.** After signing in you open one of your groups, join one with its
+  group code and group password, or start a new one. Everything below
+  (chat, calendar, households, ...) belongs to one group; nobody outside it
+  sees anything. A server function checks the password (stored only as a
+  scrypt hash) and allows 5 wrong tries per person and 20 per group per hour.
+- **Starting a group** takes five steps: name and picture, password (with a
+  strength hint), which pages the group uses, the look, a summary. The
+  person who starts a group is its first admin.
+- **Gruppe** page: the group code to share, and for admins: name and
+  picture, a new password, pages on or off, the look, members (make admin,
+  remove). Everyone can switch group or leave (an admin only after losing the
+  admin role); admins can delete the group with everything in it.
+- **Look of a group** (admins, see it live while choosing): six styles (Ruhig,
+  Warm, Wald, Meer, Verspielt, Nacht), each light and dark; own main, accent
+  and background colors (changed automatically if they would be hard to
+  read); 12 built in background pictures with a strength slider; four fonts
+  (clear, round, classic, handwritten headings); round or square corners;
+  normal or compact spacing; a welcome line and which start page cards show
+  in which order. Light or dark stays each person's own choice. No uploads.
 - **Start** (home): greeting, pinned notices, the weekly overview by Claude,
   the question of the day, the next trip, the next 7 days, upcoming birthdays,
   tasks for you, polls waiting for your vote, the newest chat messages, the
@@ -33,7 +53,7 @@ and French (it follows the browser; changeable in the settings).
   name the whole family sees ("Benni" instead of the Google name; no name
   twice, and "Google Namen verwenden" goes back). Everyone can also give the
   others their own names ("Mama"); only the person who gave a name sees it.
-- **Households**: admins set up groups (for example "Zürich", "Bei Oma"); a
+- **Households** (inside a group): admins set them up (for example "Zürich", "Bei Oma"); a
   person can be in several. Calendar entries, tasks and polls belong to the
   whole family or to one household, and each household has its own chat room
   and weekly overview. Only its members see what is in a household (admins
@@ -67,7 +87,9 @@ and French (it follows the browser; changeable in the settings).
   from the calendar, due tasks and open polls.
 - **Börse** (markets): US indices, the 200 largest US stocks, a family
   watchlist of up to 10 symbols with small charts. Prices are delayed at least
-  15 minutes, data from NGN Market. No trading, no advice, no alerts.
+  15 minutes, data from NGN Market. No trading, no advice, no alerts. Locked
+  for new groups (an unlock code follows later); the group "Familie" has it.
+  Only people with a `marketAccess` document see it.
 - **Risiko** (risk): theoretical risk figures for the watchlist, computed in
   plain code from the closing prices the app stores (yearly volatility,
   biggest fall from a peak, distance to the high, 95 % daily loss, worst day,
@@ -75,8 +97,9 @@ and French (it follows the browser; changeable in the settings).
   a short daily summary in English and French written by Claude Opus 5.5.
   Describes the past only; no advice.
 - **Einstellungen** (settings): language, light or dark look, simple mode
-  for this device, the watchlist, the market, overview and translation
-  switches (admins only), allow list and admins (admins only), sign out.
+  for this device, the watchlist (with market access), the market switches
+  (market admins), overview and translation switches (group admins), sign
+  out.
 
 Setup for the owner: see **[SETUP.md](SETUP.md)**.
 
@@ -85,8 +108,10 @@ Setup for the owner: see **[SETUP.md](SETUP.md)**.
 ```
 Browser (public/)                Firebase (Google, region europe-west3)
  plain HTML, CSS, JS modules      Hosting       serves public/ with strict security headers
- Firebase JS SDK 13.1.0  ───────► Auth          Google sign in
- (pinned, from gstatic)  ◄──────► Firestore     allow list, chat, watchlist, stored market data
+ Firebase JS SDK 13.1.0  ───────► Auth          Google, or mail and password
+ (pinned, from gstatic)  ◄──────► Firestore     groups and their data, watchlist, stored market data
+                         ───────► Functions     createGroupCall, joinGroupCall, setGroupPasswordCall
+                                                (called by the page: group passwords, codes, tries)
                                   App Check     reCAPTCHA Enterprise (enforced after testing)
                                   Functions     marketUpdate (Node.js 22), every 30 min
                                      │          on US trading days; after the close it
@@ -109,6 +134,8 @@ Browser (public/)                Firebase (Google, region europe-west3)
                                   Functions     cleanupHousehold, when a household is deleted:
                                                 deletes everything inside it
                                                 (both also delete the rooms' translations)
+                                  Functions     cleanupGroup, when a group is deleted:
+                                                deletes everything inside it, its code and secret
 
  Weather page ──────────────────► Open-Meteo (forecast and place search, no key,
                                   only the rough coordinates of saved places)
@@ -119,9 +146,19 @@ Keys (NGN_API_KEY, ANTHROPIC_API_KEY) live only in Secret Manager.
 
 - No server to run, no build step, no PHP. Hosting serves the files in
   `public/` as they are.
-- **Who may do what is decided by `firestore.rules`**, not by the page. The
-  page reads `config/access`; the rules only allow that for people on the list,
-  so "readable" means "member" and "refused" means "Kein Zugang".
+- **Who may do what is decided by `firestore.rules`**, not by the page. A
+  person belongs to a group when `groups/{g}/members/{uid}` exists; the rules
+  check that on every read and write inside the group. Only the server
+  functions create members (after the right password), so nobody can add
+  themselves. The page reads its own member document; "refused" means "not
+  (any more) in this group" and the page goes back to the group list.
+- **The page code works on one group at a time.** `public/js/firebase.js`
+  puts every data path under `groups/{active group}/` (`public/js/scope.js`);
+  only the person's own and the market documents stay outside. Switching
+  group reloads the page, so nothing of the old group remains in memory.
+- **Pages switched off** by a group are hidden in the app; the rules do not
+  block them (their data stays). Markets are the exception: the rules let only
+  people with `marketAccess/{uid}` read them.
 - **The browser never talks to NGN Market or Anthropic and never sees a key.**
   The scheduled Cloud Functions fetch and compute, store a copy in Firestore,
   and the page shows only that copy. The one outside service the browser
@@ -166,9 +203,25 @@ Keys (NGN_API_KEY, ANTHROPIC_API_KEY) live only in Secret Manager.
 
 ### Data model (Firestore)
 
+Group documents, and everything that lives outside the groups:
+
 | Path | Content | Who writes |
 | :- | :- | :- |
-| `config/access` | `members: [mail]`, `admins: [mail]`, `updatedAt`, `updatedBy` | admins (first admin by hand) |
+| `groups/{g}` | `name`, `icon`, `code`, `features { chat: true, ... }`, `design { theme, main, accent, background, pattern, patternStrength, font, corners, spacing, cards, welcome }`, `marketsUnlocked`, created and updated fields | created by `createGroupCall`; admins change name, icon, features and design; admins delete |
+| `groups/{g}/members/{uid}` | `uid`, `mail`, `name`, `role` (admin, member), `joinedAt` | created by the functions only; admins change roles (not their own) and remove members; members remove themselves |
+| `groupCodes/{code}` | `group`: which group a code opens | functions only; nobody reads it in the app |
+| `groupSecrets/{g}` | `salt`, `hash` (scrypt) of the group password, wrong tries per group | functions only; nobody reads it |
+| `joinAttempts/{uid}` | `count`, `since`: wrong tries of a person in the last hour | functions only |
+| `marketAccess/{uid}` | optional `admin: true` (market switches), `grantedAt` | functions (on joining a group with markets) and the migration only; each person reads their own |
+The paths in the next table live **inside a group**, at `groups/{g}/...`
+(for example `groups/{g}/rooms/familie`), and are shown without that prefix.
+Exceptions that stay outside the groups (they belong to the person or to the
+whole app): `nicknames`, `config/watchlist`, `config/market`,
+`translateUsage`, `market` and `marketHistory`. Watchlist and market data
+are readable only with `marketAccess`.
+
+| Path | Content | Who writes |
+| :- | :- | :- |
 | `config/watchlist` | `symbols: [..]` (max 10), `updatedAt`, `updatedBy` | members |
 | `config/market` | `enabled` (market on/off), `aiEnabled` (AI summary on/off), `updatedAt`, `updatedBy`; missing values count as on | admins |
 | `config/digest` | `enabled` (weekly overview on/off), `updatedAt`, `updatedBy`; missing counts as on | admins |
@@ -268,14 +321,13 @@ clearly allow** showing the data to a private family group on the free plan:
 
 The owner decided to ship the market part **switched on**, because the app is
 for the owner's own private use, which fits the "personal" licence. A missing
-`config/market` document counts as on; an admin can switch it off in the app
-(`enabled: false`). Before other people are added to the allow list, the
-question above applies again; SETUP.md step 3 contains a ready mail asking
-NGN Market for a written OK. This matters now that the app is a family hub:
-everyone on the allow list sees Börse and Risiko. Without NGN's OK, either
-switch the market part off before inviting the family, or ask for a change
-that shows these two pages only to admins (not built yet). The page always shows "Kurse mit mindestens 15
-Minuten Verzögerung · Daten: NGN Market".
+`config/market` document counts as on; a market admin can switch it off in
+the app (`enabled: false`). Börse and Risiko are locked for every new group;
+only the group "Familie" has them, and only people with a `marketAccess`
+document see them. Before the market is opened to more people, the question
+above applies again; SETUP.md step 3 contains a ready mail asking NGN Market
+for a written OK. The page always shows "Kurse mit mindestens 15 Minuten
+Verzögerung · Daten: NGN Market".
 
 Also checked as replacements on request: liquid.trade (a trading app without a
 public data API; its terms forbid copying prices and automated access) and
@@ -292,21 +344,22 @@ notice board, notebook, family tree and question of the day on 23 October
 
 | Layer | Protection |
 | :- | :- |
-| Sign in | Google only; verified mail; the rules also check the sign in provider |
-| Access | allow list in `config/access`, checked by the rules on every read and write |
+| Sign in | Google, or mail and password with a confirmed mail; the rules check the provider (only these two) and the confirmed mail |
+| Access | membership in `groups/{g}/members/{uid}`, checked by the rules on every read and write in the group; members are created only by the functions after the right group password |
+| Group passwords | stored only as a scrypt hash in `groupSecrets` (nobody can read it); checked in a function; 5 wrong tries per person and 20 per group per hour; codes without look alike characters |
 | Data | deny by default; every field of every write checked (`firestore.rules`, 105 tests); market, AI, overview and translation results written only by the functions |
 | Households | everything inside a household (calendar, tasks, polls, chat, overview) is readable and writable only by its members, admins included; the rules check membership by the path |
 | Nicknames | each person's names for others live in a document only that person can read |
 | Colors and visible names | a color (and a visible name) is a document named after it, so two people can never hold the same one |
 | Question of the day | the rules hide the others' answers until your own answer exists |
 | Translations | only people who may read a message can ask for its translation or read it, and only while the message exists; translations cannot be listed; 100 per person and day |
-| Allow list | only admins change it; entries must be lower case mail addresses without duplicates; an admin cannot remove themselves |
+| Group admins | change the group's name, picture, pages and look (every field checked), roles of others and remove members; an admin cannot change their own role; admins can leave only after losing the role |
 | Private rooms | invisible to everyone not listed, admins included; the rules check every message read and write against the room |
 | Contacts | everyone in the family reads them (they may hold health notes); only admins write; phone links can only dial digits |
 | Page | no HTML is ever built from data (text is always set as text); profile photos only from `googleusercontent.com` |
 | Browser | strict Content Security Policy and headers (below); service worker stores page files only |
 | Keys | only in Secret Manager, each one given only to the function that needs it; nothing secret in git |
-| Server | no public endpoints: three functions run on a timer, two run when a room or a household is deleted, one when a translation is asked for; no automatic retries |
+| Server | three callable functions (start a group, join a group, new group password) accept only signed in people with a confirmed mail and App Check; three run on a timer, three when a room, household or group is deleted, one when a translation is asked for; no automatic retries |
 | AI | risk summary: numbers and stock names only. Weekly overview: the coming week's calendar titles, due tasks and poll questions, never notes, chat, contacts, recipes or mail addresses. Translation: only the text of the one message someone tapped, never names or mail addresses. Answers are shown as plain text |
 | Weather | the browser asks Open-Meteo with rounded coordinates of saved places only |
 | Costs | budget alert, NGN budget guard, Anthropic spend limit |
@@ -322,7 +375,8 @@ Content Security Policy allowing only this site, the pinned Firebase SDK
 (`www.gstatic.com/firebasejs/`), Google sign in (`apis.google.com`, and
 frames only from this project's sign in domain
 `familyhub-5355f.firebaseapp.com`; change it there if you ever use your own
-domain for sign in), Firestore and Auth endpoints, App Check and reCAPTCHA,
+domain for sign in), Firestore and Auth endpoints, the group functions
+(`europe-west3-familyhub-5355f.cloudfunctions.net`), App Check and reCAPTCHA,
 Open-Meteo (`api.open-meteo.com`, `geocoding-api.open-meteo.com`) and Google
 profile photos. Plus `Strict-Transport-Security` (https only for a
 year), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
@@ -339,9 +393,15 @@ public/                 the website (served by Firebase Hosting)
   css/family.css        styles for the family hub pages, dialogs and chat extras
   css/house.css         styles for colors, nicknames, households and calendar lines
   css/more.css          styles for translations, notice board, trips, question, tree, simple mode
+  css/groups.css        styles for mail sign in, the group list, the wizard and the look editor
   js/firebase-config.js web config of your project (not secret) and the App Check key
-  js/firebase.js        loads the pinned Firebase SDK, emulators on localhost
-  js/app.js             sign in, allow list check, navigation, starts the pages
+  js/firebase.js        loads the pinned Firebase SDK, emulators on localhost, puts paths under the active group
+  js/scope.js           the active group of this device and which paths belong to it (tested in Node)
+  js/app.js             sign in, opening a group, navigation, starts the pages
+  js/start.js           mail sign in and register, mail check, group list, join, the five step wizard
+  js/group-page.js      Gruppe page (code, password, pages, look, members, leave, delete)
+  js/group-forms.js     the editors used by the wizard and the Gruppe page
+  js/design.js          group looks: styles, colors with contrast check, background pictures, fonts (tested in Node)
   js/family-data.js     live copies of the family and household documents, names, colors
   js/family-page.js     Familie page (your name, colors, nicknames, households)
   js/colors.js          the 16 person colors
@@ -368,7 +428,7 @@ public/                 the website (served by Firebase Hosting)
   js/risk-page.js       Risiko page (risk figures and AI summary)
   js/market-data.js     live copies of the market documents
   js/settings.js        settings
-  js/strings.js         app text in German, English and French (plus strings-family.js, strings-house.js, strings-more.js)
+  js/strings.js         app text in German, English and French (plus strings-family.js, strings-house.js, strings-more.js, strings-groups.js)
   js/i18n.js            picks the language, fills the page text
   js/ui.js              small helpers (safe text, dates in the chosen language, cards)
   js/theme-boot.js      applies light or dark before the page is drawn
@@ -376,7 +436,10 @@ public/                 the website (served by Firebase Hosting)
   sw.js                 service worker (page files only)
   icons/                own icons (house with heart), made by scripts/make-icons.mjs
 functions/              Cloud Functions (Node.js 22, firebase-functions v2 API)
-  index.js              marketUpdate, riskSummary, weeklyDigest, translateMessage, cleanupRoom, cleanupHousehold
+  index.js              marketUpdate, riskSummary, weeklyDigest, translateMessage, cleanupRoom, cleanupHousehold,
+                        cleanupGroup, createGroupCall, joinGroupCall, setGroupPasswordCall
+  groups.js             starting and joining groups, group codes, password hashes, try limits
+  migrate.js            the one time move of the family data into the group "Familie"
   ngn-client.js         small NGN Market client
   market.js             trading days, budget guard, parsing, the market run
   risk.js               risk figures in plain code (volatility, drawdown, beta, ...)
@@ -386,12 +449,16 @@ functions/              Cloud Functions (Node.js 22, firebase-functions v2 API)
   firestore-store.js    reading and writing the documents the functions use
   test/                 function tests with stub APIs (no real calls)
   scripts/demo-stub-data.mjs     fills the LOCAL emulator with made up market data and a demo summary
-  scripts/demo-family-data.mjs   fills the LOCAL emulator with made up family data
+  scripts/demo-family-data.mjs   fills the LOCAL emulator with a made up demo group and three sign in accounts
+  scripts/migrate-to-groups.mjs  run once by the owner: moves the family data into the group "Familie"
 tests/rules.test.js     security rules tests (Firestore emulator)
 tests/rules-family.test.js  security rules tests for the family hub parts
 tests/rules-households.test.js  security rules tests for colors, nicknames and households
 tests/rules-extra.test.js  security rules tests for names, translations, trips, notices, notebook, tree, question
+tests/rules-groups.test.js  security rules tests for groups, members, sign in providers and market access
+tests/group-seed.js     the test group used by all rules tests
 tests/strings.test.js   app text checks (same keys in 3 languages, no dashes, "Mail", the questions)
+tests/scope.test.js, design.test.js  checks for group paths and group looks
 tests/dates.test.js     calendar day checks (birthdays, several days, 29 February, calendar lines)
 tests/colors.test.js, names.test.js, tree-layout.test.js  checks for colors, visible names and the tree layout
 scripts/serve-local.mjs local web server with the same headers (for testing)
@@ -399,7 +466,7 @@ scripts/make-icons.mjs  draws the icons
 firebase.json           Hosting, headers, Firestore, Functions, emulators
 .firebaserc             project ID (familyhub-5355f)
 firestore.rules         security rules
-firestore.indexes.json  index settings (one composite index: recently done tasks)
+firestore.indexes.json  index settings (recently done tasks; members by uid for "my groups")
 SETUP.md                step by step setup for the owner
 ```
 
@@ -411,10 +478,10 @@ deployed function runs on Node.js 22).
 ```
 npm install
 npm --prefix functions install
-npm test               # 35 text, date, color, name and tree checks + 84 function tests + 105 rules tests
-npm run emulators      # local site on http://127.0.0.1:5000, Emulator UI on :4000
+npm test               # 49 Node checks + 102 function tests + 120 rules tests
+npm run emulators      # local site on http://127.0.0.1:5000, Emulator UI on :4000 (auth, Firestore, functions)
 npm run demo:market    # (second window) made up market data for the local site
-npm run demo:family    # (second window) made up family data; sign in as chef@example.com
+npm run demo:family    # (second window) a demo group; accounts and password are at the top of the script
 ```
 
 Why a local web server instead of the Hosting emulator: with current Node
@@ -428,8 +495,10 @@ When changing page files, also raise `VERSION` in `public/sw.js` and
 
 ## Later ideas (not in this version)
 
-- Börse and Risiko visible only to admins (needed before inviting the family
-  unless NGN Market agrees)
+- Phase 2: a vouchers page
+- Phase 3: an unlock code for Börse and Risiko in other groups, and limits per
+  group for the AI features (overview, translations)
+- Invitations by link instead of code and password
 - Push notifications (new messages, birthdays, due tasks)
 - Images and files in the chat, photo albums
 - Repeating tasks (weekly chores)

@@ -15,7 +15,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const hosting = JSON.parse(readFileSync(join(root, 'firebase.json'), 'utf8')).hosting;
 const publicDir = join(root, hosting.public);
 const PORT = Number(process.env.PORT || 5000);
-const EMULATORS = 'http://127.0.0.1:9099 http://127.0.0.1:8080';
+const EMULATORS = 'http://127.0.0.1:9099 http://127.0.0.1:8080 http://127.0.0.1:5001';
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',

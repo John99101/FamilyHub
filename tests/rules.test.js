@@ -9,8 +9,9 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs,
-  query, orderBy, limit, serverTimestamp, Timestamp, arrayUnion, setLogLevel,
+  query, orderBy, limit, serverTimestamp, Timestamp, setLogLevel,
 } from 'firebase/firestore';
+import { GROUP, seedGroup } from './group-seed.js';
 
 // The expected denials would otherwise flood the output with warnings.
 setLogLevel('silent');
@@ -48,7 +49,7 @@ function messageFrom(user, overrides = {}) {
   };
 }
 
-const messages = (db) => collection(db, 'rooms', 'familie', 'messages');
+const messages = (db) => collection(db, 'groups', GROUP, 'rooms', 'familie', 'messages');
 
 before(async () => {
   env = await initializeTestEnvironment({
@@ -69,15 +70,16 @@ beforeEach(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    await setDoc(doc(db, 'config', 'access'), {
-      members: [MEMBER.email, MEMBER2.email],
-      admins: [ADMIN.email],
-    });
-    await setDoc(doc(db, 'rooms', 'familie'), { name: 'Familie', createdAt: Timestamp.now() });
-    await setDoc(doc(db, 'rooms', 'familie', 'messages', 'm_anna'), {
+    await seedGroup(db, { admins: [ADMIN], members: [MEMBER, MEMBER2] });
+    // Market access is separate from the group: the admin manages the markets.
+    await setDoc(doc(db, 'marketAccess', ADMIN.uid), { admin: true });
+    await setDoc(doc(db, 'marketAccess', MEMBER.uid), {});
+    await setDoc(doc(db, 'marketAccess', MEMBER2.uid), {});
+    await setDoc(doc(db, 'groups', GROUP, 'rooms', 'familie'), { name: 'Familie', createdAt: Timestamp.now() });
+    await setDoc(doc(db, 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_anna'), {
       uid: MEMBER.uid, name: MEMBER.name, photo: MEMBER.picture, text: 'Von Anna', createdAt: Timestamp.now(),
     });
-    await setDoc(doc(db, 'rooms', 'familie', 'messages', 'm_ben'), {
+    await setDoc(doc(db, 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_ben'), {
       uid: MEMBER2.uid, name: MEMBER2.name, photo: MEMBER2.picture, text: 'Von Ben', createdAt: Timestamp.now(),
     });
     await setDoc(doc(db, 'secrets', 'x'), { a: 1 });
@@ -185,47 +187,49 @@ describe('markets', () => {
 describe('strangers and incomplete sign ins', () => {
   it('signed out visitor can read nothing', async () => {
     const db = env.unauthenticatedContext().firestore();
-    await assertFails(getDoc(doc(db, 'config', 'access')));
+    await assertFails(getDoc(doc(db, 'groups', GROUP)));
     await assertFails(getDocs(messages(db)));
-    await assertFails(getDoc(doc(db, 'rooms', 'familie')));
+    await assertFails(getDoc(doc(db, 'groups', GROUP, 'rooms', 'familie')));
   });
 
-  it('stranger (not on the allow list) is denied everywhere', async () => {
+  it('stranger (not in the group) is denied everywhere', async () => {
     const db = dbAs(STRANGER);
-    await assertFails(getDoc(doc(db, 'config', 'access')));
-    await assertFails(getDoc(doc(db, 'rooms', 'familie')));
+    await assertFails(getDoc(doc(db, 'groups', GROUP)));
+    await assertFails(getDoc(doc(db, 'groups', GROUP, 'rooms', 'familie')));
     await assertFails(getDocs(messages(db)));
-    await assertFails(getDoc(doc(db, 'rooms', 'familie', 'messages', 'm_anna')));
+    await assertFails(getDoc(doc(db, 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_anna')));
     await assertFails(addDoc(messages(db), messageFrom(STRANGER)));
-    await assertFails(deleteDoc(doc(db, 'rooms', 'familie', 'messages', 'm_anna')));
-    await assertFails(updateDoc(doc(db, 'config', 'access'), { members: [STRANGER.email] }));
-    await assertFails(setDoc(doc(db, 'rooms', 'neu'), { name: 'Neu', createdAt: serverTimestamp() }));
+    await assertFails(deleteDoc(doc(db, 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_anna')));
+    await assertFails(setDoc(doc(db, 'groups', GROUP, 'members', STRANGER.uid), { uid: STRANGER.uid, role: 'member' }));
+    await assertFails(setDoc(doc(db, 'groups', GROUP, 'rooms', 'neu'), { name: 'Neu', createdAt: serverTimestamp() }));
     await assertFails(getDoc(doc(db, 'secrets', 'x')));
   });
 
-  it('listed mail that is not verified is denied', async () => {
+  it('member whose mail is not verified is denied', async () => {
     const db = dbAs(MEMBER, { email_verified: false });
     await assertFails(getDocs(messages(db)));
     await assertFails(addDoc(messages(db), messageFrom(MEMBER)));
   });
 
-  it('listed mail signed in with another provider than Google is denied', async () => {
-    const db = dbAs(MEMBER, { firebase: { sign_in_provider: 'password' } });
-    await assertFails(getDocs(messages(db)));
-    await assertFails(getDoc(doc(db, 'config', 'access')));
+  it('member signed in with mail and password (verified) is let in', async () => {
+    const db = env.authenticatedContext(MEMBER.uid, {
+      email: MEMBER.email, email_verified: true, name: MEMBER.name, firebase: { sign_in_provider: 'password' },
+    }).firestore();
+    await assertSucceeds(getDocs(messages(db)));
   });
 
-  it('mail on the list is matched without regard to upper or lower case', async () => {
-    const db = dbAs(MEMBER, { email: 'Anna@Example.com' });
-    await assertSucceeds(getDoc(doc(db, 'config', 'access')));
+  it('member signed in with another provider (anonymous, phone) is denied', async () => {
+    for (const provider of ['anonymous', 'phone', 'custom']) {
+      await assertFails(getDocs(messages(dbAs(MEMBER, { firebase: { sign_in_provider: provider } }))));
+    }
   });
 });
 
 describe('members in the chat', () => {
-  it('member can read the allow list, the room and the messages', async () => {
+  it('member can read the group, the room and the messages', async () => {
     const db = dbAs(MEMBER);
-    await assertSucceeds(getDoc(doc(db, 'config', 'access')));
-    await assertSucceeds(getDoc(doc(db, 'rooms', 'familie')));
+    await assertSucceeds(getDoc(doc(db, 'groups', GROUP)));
+    await assertSucceeds(getDoc(doc(db, 'groups', GROUP, 'rooms', 'familie')));
     await assertSucceeds(getDocs(query(messages(db), orderBy('createdAt', 'desc'), limit(50))));
   });
 
@@ -255,32 +259,25 @@ describe('members in the chat', () => {
   });
 
   it('member can delete their own message', async () => {
-    await assertSucceeds(deleteDoc(doc(dbAs(MEMBER), 'rooms', 'familie', 'messages', 'm_anna')));
+    await assertSucceeds(deleteDoc(doc(dbAs(MEMBER), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_anna')));
   });
 
   it('member cannot delete another member\'s message', async () => {
-    await assertFails(deleteDoc(doc(dbAs(MEMBER), 'rooms', 'familie', 'messages', 'm_ben')));
+    await assertFails(deleteDoc(doc(dbAs(MEMBER), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_ben')));
   });
 
   it('nobody can edit a message, not even the sender', async () => {
-    await assertFails(updateDoc(doc(dbAs(MEMBER), 'rooms', 'familie', 'messages', 'm_anna'), { text: 'Geändert' }));
-    await assertFails(updateDoc(doc(dbAs(ADMIN), 'rooms', 'familie', 'messages', 'm_anna'), { text: 'Geändert' }));
+    await assertFails(updateDoc(doc(dbAs(MEMBER), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_anna'), { text: 'Geändert' }));
+    await assertFails(updateDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_anna'), { text: 'Geändert' }));
   });
 
   it('member cannot write into a room that does not exist', async () => {
     const db = dbAs(MEMBER);
-    await assertFails(addDoc(collection(db, 'rooms', 'geheim', 'messages'), messageFrom(MEMBER)));
+    await assertFails(addDoc(collection(db, 'groups', GROUP, 'rooms', 'geheim', 'messages'), messageFrom(MEMBER)));
   });
 
-  it('member cannot create a room without the room fields or change the allow list', async () => {
-    const db = dbAs(MEMBER);
-    await assertFails(setDoc(doc(db, 'rooms', 'neu'), { name: 'Neu', createdAt: serverTimestamp() }));
-    await assertFails(updateDoc(doc(db, 'config', 'access'), {
-      members: arrayUnion(STRANGER.email), updatedAt: serverTimestamp(), updatedBy: MEMBER.email,
-    }));
-    await assertFails(updateDoc(doc(db, 'config', 'access'), {
-      admins: arrayUnion(MEMBER.email), updatedAt: serverTimestamp(), updatedBy: MEMBER.email,
-    }));
+  it('member cannot create a room without the room fields', async () => {
+    await assertFails(setDoc(doc(dbAs(MEMBER), 'groups', GROUP, 'rooms', 'neu'), { name: 'Neu', createdAt: serverTimestamp() }));
   });
 
   it('nobody can read or write documents outside the data model', async () => {
@@ -330,48 +327,51 @@ describe('message field checks', () => {
 
 describe('admins', () => {
   it('admin can delete any message', async () => {
-    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'rooms', 'familie', 'messages', 'm_anna')));
-    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'rooms', 'familie', 'messages', 'm_ben')));
+    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_anna')));
+    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_ben')));
   });
 
-  it('admin can add and remove members and admins', async () => {
+  it('admin makes a member admin, and removes members who then lose access', async () => {
     const db = dbAs(ADMIN);
-    await assertSucceeds(updateDoc(doc(db, 'config', 'access'), {
-      members: [MEMBER.email, STRANGER.email],
-      admins: [ADMIN.email, MEMBER.email],
-      updatedAt: serverTimestamp(),
-      updatedBy: ADMIN.email,
-    }));
-    // The new member can now read, the removed one (Ben) cannot.
-    await assertSucceeds(getDocs(messages(dbAs(STRANGER))));
-    await assertFails(getDocs(messages(dbAs(MEMBER2))));
+    await assertSucceeds(updateDoc(doc(db, 'groups', GROUP, 'members', MEMBER.uid), { role: 'admin' }));
     // The new admin can delete any message.
-    await assertSucceeds(deleteDoc(doc(dbAs(MEMBER), 'rooms', 'familie', 'messages', 'm_ben')));
+    await assertSucceeds(deleteDoc(doc(dbAs(MEMBER), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm_ben')));
+    await assertSucceeds(deleteDoc(doc(db, 'groups', GROUP, 'members', MEMBER2.uid)));
+    await assertFails(getDocs(messages(dbAs(MEMBER2))));
   });
 
-  it('admin cannot remove themselves from the admins', async () => {
-    await assertFails(updateDoc(doc(dbAs(ADMIN), 'config', 'access'), {
-      admins: [MEMBER.email], updatedAt: serverTimestamp(), updatedBy: ADMIN.email,
-    }));
-  });
-
-  it('admin changes must carry server time and the admin\'s own mail', async () => {
+  it('admin cannot change their own role or other member fields', async () => {
     const db = dbAs(ADMIN);
-    await assertFails(updateDoc(doc(db, 'config', 'access'), { members: [MEMBER.email] }));
-    await assertFails(updateDoc(doc(db, 'config', 'access'), {
-      members: [MEMBER.email], updatedAt: serverTimestamp(), updatedBy: 'someone@example.com',
-    }));
-    await assertFails(updateDoc(doc(db, 'config', 'access'), {
-      members: [MEMBER.email], updatedAt: serverTimestamp(), updatedBy: ADMIN.email, extra: true,
-    }));
+    await assertFails(updateDoc(doc(db, 'groups', GROUP, 'members', ADMIN.uid), { role: 'member' }));
+    await assertFails(updateDoc(doc(db, 'groups', GROUP, 'members', MEMBER.uid), { role: 'owner' }));
+    await assertFails(updateDoc(doc(db, 'groups', GROUP, 'members', MEMBER.uid), { mail: 'x@example.com' }));
   });
 
-  it('allow list entries must be lower case mail addresses, each only once', async () => {
+  it('members cannot change roles or remove others', async () => {
+    const db = dbAs(MEMBER);
+    await assertFails(updateDoc(doc(db, 'groups', GROUP, 'members', MEMBER.uid), { role: 'admin' }));
+    await assertFails(updateDoc(doc(db, 'groups', GROUP, 'members', MEMBER2.uid), { role: 'admin' }));
+    await assertFails(deleteDoc(doc(db, 'groups', GROUP, 'members', MEMBER2.uid)));
+  });
+
+  it('a member may leave; an admin first loses the admin role, and no admin removes another admin', async () => {
+    await assertSucceeds(deleteDoc(doc(dbAs(MEMBER), 'groups', GROUP, 'members', MEMBER.uid)));
+    await assertFails(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'members', ADMIN.uid)));
+    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'members', MEMBER2.uid), { role: 'admin' }));
+    await assertFails(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'members', MEMBER2.uid)));
+  });
+
+  it('nobody joins or adds people from the app (only the Cloud Function does)', async () => {
+    const entry = (user, role) => ({ uid: user.uid, mail: user.email, name: user.name, role, joinedAt: serverTimestamp() });
+    await assertFails(setDoc(doc(dbAs(STRANGER), 'groups', GROUP, 'members', STRANGER.uid), entry(STRANGER, 'member')));
+    await assertFails(setDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'members', STRANGER.uid), entry(STRANGER, 'member')));
+  });
+
+  it('member lists (households, rooms) must be lower case mail addresses, each only once', async () => {
     const db = dbAs(ADMIN);
-    const save = (members, admins = [ADMIN.email]) => updateDoc(doc(db, 'config', 'access'), {
-      members, admins, updatedAt: serverTimestamp(), updatedBy: ADMIN.email,
+    const save = (members) => setDoc(doc(db, 'groups', GROUP, 'households', 'hx'), {
+      name: 'Haus', members, updatedAt: serverTimestamp(), updatedBy: ADMIN.email,
     });
-    await assertSucceeds(save([]));
     await assertSucceeds(save(['anna@example.com', 'o.brien+fh@mail.example.co.uk', "d'arc@example.fr"]));
     await assertFails(save(['Anna@Example.com']));
     await assertFails(save(['anna@example.com', 'anna@example.com']));
@@ -379,19 +379,13 @@ describe('admins', () => {
     await assertFails(save(['anna@example']));
     await assertFails(save(['anna@example.com|ben@example.com']));
     await assertFails(save([42]));
-    await assertFails(save([], [ADMIN.email, 'Chef2@example.com']));
-    await assertFails(save([], [ADMIN.email, ADMIN.email]));
-  });
-
-  it('nobody can delete or recreate the allow list from the app', async () => {
-    await assertFails(deleteDoc(doc(dbAs(ADMIN), 'config', 'access')));
   });
 
   it('only an admin sets up the main room "familie" (other rooms need the full room fields)', async () => {
-    await env.withSecurityRulesDisabled((ctx) => deleteDoc(doc(ctx.firestore(), 'rooms', 'familie')));
-    await assertFails(setDoc(doc(dbAs(MEMBER), 'rooms', 'familie'), { name: 'Familie', createdAt: serverTimestamp() }));
-    await assertFails(setDoc(doc(dbAs(ADMIN), 'rooms', 'familie'), { name: '', createdAt: serverTimestamp() }));
-    await assertSucceeds(setDoc(doc(dbAs(ADMIN), 'rooms', 'familie'), { name: 'Familie', createdAt: serverTimestamp() }));
-    await assertFails(setDoc(doc(dbAs(ADMIN), 'rooms', 'urlaub'), { name: 'Urlaub', createdAt: serverTimestamp() }));
+    await env.withSecurityRulesDisabled((ctx) => deleteDoc(doc(ctx.firestore(), 'groups', GROUP, 'rooms', 'familie')));
+    await assertFails(setDoc(doc(dbAs(MEMBER), 'groups', GROUP, 'rooms', 'familie'), { name: 'Familie', createdAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'rooms', 'familie'), { name: '', createdAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'rooms', 'familie'), { name: 'Familie', createdAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'rooms', 'urlaub'), { name: 'Urlaub', createdAt: serverTimestamp() }));
   });
 });

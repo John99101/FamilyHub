@@ -8,6 +8,7 @@ import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, query, where, orderBy, limit,
   serverTimestamp, Timestamp, arrayUnion, writeBatch, setLogLevel,
 } from 'firebase/firestore';
+import { GROUP, seedGroup } from './group-seed.js';
 
 setLogLevel('silent');
 
@@ -39,21 +40,21 @@ after(async () => { await env?.cleanup(); });
 beforeEach(async () => {
   await env.clearFirestore();
   await seed(async (db) => {
-    await setDoc(doc(db, 'config', 'access'), { members: [ANNA.email, BEN.email], admins: [ADMIN.email] });
-    await setDoc(doc(db, 'people', BEN.uid), { name: BEN.name, mail: BEN.email, photo: BEN.picture, color: 'red', updatedAt: Timestamp.now() });
-    await setDoc(doc(db, 'colors', 'red'), { uid: BEN.uid });
-    await setDoc(doc(db, 'households', 'h1'), { name: 'Zürich', members: [ANNA.email, ADMIN.email], updatedAt: Timestamp.now(), updatedBy: ADMIN.email });
-    await setDoc(doc(db, 'households', 'h2'), { name: 'Bei Ben', members: [BEN.email], updatedAt: Timestamp.now(), updatedBy: ADMIN.email });
-    await setDoc(doc(db, 'households', 'h1', 'rooms', 'main'), { name: 'Zürich', createdAt: Timestamp.now() });
-    await setDoc(doc(db, 'households', 'h1', 'rooms', 'main', 'messages', 'm1'), {
+    await seedGroup(db, { admins: [ADMIN], members: [ANNA, BEN] });
+    await setDoc(doc(db, 'groups', GROUP, 'people', BEN.uid), { name: BEN.name, mail: BEN.email, photo: BEN.picture, color: 'red', updatedAt: Timestamp.now() });
+    await setDoc(doc(db, 'groups', GROUP, 'colors', 'red'), { uid: BEN.uid });
+    await setDoc(doc(db, 'groups', GROUP, 'households', 'h1'), { name: 'Zürich', members: [ANNA.email, ADMIN.email], updatedAt: Timestamp.now(), updatedBy: ADMIN.email });
+    await setDoc(doc(db, 'groups', GROUP, 'households', 'h2'), { name: 'Bei Ben', members: [BEN.email], updatedAt: Timestamp.now(), updatedBy: ADMIN.email });
+    await setDoc(doc(db, 'groups', GROUP, 'households', 'h1', 'rooms', 'main'), { name: 'Zürich', createdAt: Timestamp.now() });
+    await setDoc(doc(db, 'groups', GROUP, 'households', 'h1', 'rooms', 'main', 'messages', 'm1'), {
       uid: ADMIN.uid, name: ADMIN.name, photo: ADMIN.picture, text: 'Hallo Zürich', createdAt: Timestamp.now(),
     });
-    await setDoc(doc(db, 'households', 'h1', 'events', 'e1'), {
+    await setDoc(doc(db, 'groups', GROUP, 'households', 'h1', 'events', 'e1'), {
       title: 'Elternabend', date: '2026-11-03', endDate: '', time: '19:00', place: '', note: '', kind: 'event', repeat: 'none',
       yearKnown: true, person: ANNA.email, createdBy: ANNA.uid, createdByName: ANNA.name, createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
     });
-    await setDoc(doc(db, 'households', 'h1', 'digest', 'current'), { de: 'Text', en: 'Text', fr: 'Texte' });
-    await setDoc(doc(db, 'households', 'h2', 'events', 'e2'), {
+    await setDoc(doc(db, 'groups', GROUP, 'households', 'h1', 'digest', 'current'), { de: 'Text', en: 'Text', fr: 'Texte' });
+    await setDoc(doc(db, 'groups', GROUP, 'households', 'h2', 'events', 'e2'), {
       title: 'Nur Ben', date: '2026-11-04', endDate: '', time: '', place: '', note: '', kind: 'event', repeat: 'none',
       yearKnown: true, createdBy: BEN.uid, createdByName: BEN.name, createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
     });
@@ -64,9 +65,9 @@ beforeEach(async () => {
 function takeColor(user, color, previous) {
   const db = dbAs(user);
   const batch = writeBatch(db);
-  if (previous) batch.delete(doc(db, 'colors', previous));
-  batch.set(doc(db, 'colors', color), { uid: user.uid });
-  batch.set(doc(db, 'people', user.uid), profile(user, { color }));
+  if (previous) batch.delete(doc(db, 'groups', GROUP, 'colors', previous));
+  batch.set(doc(db, 'groups', GROUP, 'colors', color), { uid: user.uid });
+  batch.set(doc(db, 'groups', GROUP, 'people', user.uid), profile(user, { color }));
   return batch.commit();
 }
 
@@ -84,47 +85,47 @@ describe('colors', () => {
   });
 
   it('the profile color must be locked by the same person, and only palette colors exist', async () => {
-    await assertFails(setDoc(doc(dbAs(ANNA), 'people', ANNA.uid), profile(ANNA, { color: 'red' })));
-    await assertFails(setDoc(doc(dbAs(ANNA), 'people', ANNA.uid), profile(ANNA, { color: 'blue' })));
+    await assertFails(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'people', ANNA.uid), profile(ANNA, { color: 'red' })));
+    await assertFails(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'people', ANNA.uid), profile(ANNA, { color: 'blue' })));
     await assertFails(takeColor(ANNA, 'rainbow'));
-    await assertFails(setDoc(doc(dbAs(ANNA), 'colors', 'blue'), { uid: ANNA.uid }));
-    await assertFails(setDoc(doc(dbAs(ANNA), 'colors', 'blue'), { uid: BEN.uid }));
+    await assertFails(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'colors', 'blue'), { uid: ANNA.uid }));
+    await assertFails(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'colors', 'blue'), { uid: BEN.uid }));
   });
 
   it('updating name or photo keeps the color', async () => {
-    await assertSucceeds(setDoc(doc(dbAs(BEN), 'people', BEN.uid), profile(BEN), { merge: true }));
-    const snap = await getDoc(doc(dbAs(BEN), 'people', BEN.uid));
+    await assertSucceeds(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'people', BEN.uid), profile(BEN), { merge: true }));
+    const snap = await getDoc(doc(dbAs(BEN), 'groups', GROUP, 'people', BEN.uid));
     if (snap.data().color !== 'red') throw new Error('color lost');
   });
 
   it('nobody frees another person\'s color, except an admin once that person left the family', async () => {
-    await assertFails(deleteDoc(doc(dbAs(ANNA), 'colors', 'red')));
-    await assertFails(deleteDoc(doc(dbAs(ADMIN), 'colors', 'red')));
-    await assertFails(deleteDoc(doc(dbAs(BEN), 'colors', 'red'))); // Ben still uses it
-    await seed((db) => setDoc(doc(db, 'config', 'access'), { members: [ANNA.email], admins: [ADMIN.email] }));
-    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'colors', 'red')));
+    await assertFails(deleteDoc(doc(dbAs(ANNA), 'groups', GROUP, 'colors', 'red')));
+    await assertFails(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'colors', 'red')));
+    await assertFails(deleteDoc(doc(dbAs(BEN), 'groups', GROUP, 'colors', 'red'))); // Ben still uses it
+    await seed((db) => deleteDoc(doc(db, 'groups', GROUP, 'members', BEN.uid)));
+    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'colors', 'red')));
   });
 
   it('a stuck color (its holder\'s profile shows another color) can be freed by any member', async () => {
     await seed(async (db) => {
-      await setDoc(doc(db, 'colors', 'blue'), { uid: BEN.uid });   // Ben holds red in his profile
-      await setDoc(doc(db, 'colors', 'gold'), { uid: 'u_nobody' }); // holder without a profile
+      await setDoc(doc(db, 'groups', GROUP, 'colors', 'blue'), { uid: BEN.uid });   // Ben holds red in his profile
+      await setDoc(doc(db, 'groups', GROUP, 'colors', 'gold'), { uid: 'u_nobody' }); // holder without a profile
     });
-    await assertSucceeds(deleteDoc(doc(dbAs(ANNA), 'colors', 'blue')));
-    await assertSucceeds(deleteDoc(doc(dbAs(ANNA), 'colors', 'gold')));
-    await assertFails(deleteDoc(doc(dbAs(ANNA), 'colors', 'red'))); // in use by Ben
-    await assertFails(deleteDoc(doc(dbAs(STRANGER), 'colors', 'red')));
+    await assertSucceeds(deleteDoc(doc(dbAs(ANNA), 'groups', GROUP, 'colors', 'blue')));
+    await assertSucceeds(deleteDoc(doc(dbAs(ANNA), 'groups', GROUP, 'colors', 'gold')));
+    await assertFails(deleteDoc(doc(dbAs(ANNA), 'groups', GROUP, 'colors', 'red'))); // in use by Ben
+    await assertFails(deleteDoc(doc(dbAs(STRANGER), 'groups', GROUP, 'colors', 'red')));
   });
 
   it('someone who holds two colors gives the extra one back and keeps theirs', async () => {
-    await seed((db) => setDoc(doc(db, 'colors', 'teal'), { uid: BEN.uid }));
-    await assertSucceeds(deleteDoc(doc(dbAs(BEN), 'colors', 'teal')));
-    await assertFails(deleteDoc(doc(dbAs(BEN), 'colors', 'red')));
+    await seed((db) => setDoc(doc(db, 'groups', GROUP, 'colors', 'teal'), { uid: BEN.uid }));
+    await assertSucceeds(deleteDoc(doc(dbAs(BEN), 'groups', GROUP, 'colors', 'teal')));
+    await assertFails(deleteDoc(doc(dbAs(BEN), 'groups', GROUP, 'colors', 'red')));
   });
 
   it('everyone in the family sees who holds which color', async () => {
-    await assertSucceeds(getDocs(collection(dbAs(ANNA), 'colors')));
-    await assertFails(getDocs(collection(dbAs(STRANGER), 'colors')));
+    await assertSucceeds(getDocs(collection(dbAs(ANNA), 'groups', GROUP, 'colors')));
+    await assertFails(getDocs(collection(dbAs(STRANGER), 'groups', GROUP, 'colors')));
   });
 });
 
@@ -155,74 +156,74 @@ describe('households', () => {
   const household = (overrides = {}) => ({ name: 'Oma und Opa', members: [ANNA.email], updatedAt: serverTimestamp(), updatedBy: ADMIN.email, ...overrides });
 
   it('admins set up households; everyone sees which exist and who is in them', async () => {
-    await assertSucceeds(setDoc(doc(dbAs(ADMIN), 'households', 'h3'), household()));
-    await assertFails(setDoc(doc(dbAs(ANNA), 'households', 'h4'), household({ updatedBy: ANNA.email })));
-    await assertFails(setDoc(doc(dbAs(ADMIN), 'households', 'h5'), household({ members: [] })));
-    await assertFails(setDoc(doc(dbAs(ADMIN), 'households', 'h6'), household({ members: ['Anna'] })));
-    await assertSucceeds(getDocs(collection(dbAs(BEN), 'households')));
-    await assertFails(getDocs(collection(dbAs(STRANGER), 'households')));
-    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'households', 'h1'), { members: arrayUnion(BEN.email), updatedAt: serverTimestamp(), updatedBy: ADMIN.email }));
-    await assertFails(deleteDoc(doc(dbAs(ANNA), 'households', 'h1')));
-    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'households', 'h1')));
+    await assertSucceeds(setDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'households', 'h3'), household()));
+    await assertFails(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'households', 'h4'), household({ updatedBy: ANNA.email })));
+    await assertFails(setDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'households', 'h5'), household({ members: [] })));
+    await assertFails(setDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'households', 'h6'), household({ members: ['Anna'] })));
+    await assertSucceeds(getDocs(collection(dbAs(BEN), 'groups', GROUP, 'households')));
+    await assertFails(getDocs(collection(dbAs(STRANGER), 'groups', GROUP, 'households')));
+    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'households', 'h1'), { members: arrayUnion(BEN.email), updatedAt: serverTimestamp(), updatedBy: ADMIN.email }));
+    await assertFails(deleteDoc(doc(dbAs(ANNA), 'groups', GROUP, 'households', 'h1')));
+    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'households', 'h1')));
   });
 
   it('a household calendar is only for its members, admins included', async () => {
-    await assertSucceeds(getDocs(query(collection(dbAs(ANNA), 'households', 'h1', 'events'), where('date', '>=', '2026-01-01'))));
-    await assertFails(getDocs(collection(dbAs(BEN), 'households', 'h1', 'events')));
-    await assertFails(getDoc(doc(dbAs(BEN), 'households', 'h1', 'events', 'e1')));
-    await assertFails(getDocs(collection(dbAs(ADMIN), 'households', 'h2', 'events')));
-    await assertSucceeds(getDocs(collection(dbAs(BEN), 'households', 'h2', 'events')));
+    await assertSucceeds(getDocs(query(collection(dbAs(ANNA), 'groups', GROUP, 'households', 'h1', 'events'), where('date', '>=', '2026-01-01'))));
+    await assertFails(getDocs(collection(dbAs(BEN), 'groups', GROUP, 'households', 'h1', 'events')));
+    await assertFails(getDoc(doc(dbAs(BEN), 'groups', GROUP, 'households', 'h1', 'events', 'e1')));
+    await assertFails(getDocs(collection(dbAs(ADMIN), 'groups', GROUP, 'households', 'h2', 'events')));
+    await assertSucceeds(getDocs(collection(dbAs(BEN), 'groups', GROUP, 'households', 'h2', 'events')));
     const entry = (user) => ({
       title: 'Kino', date: '2026-11-05', endDate: '', time: '', place: '', note: '', kind: 'event', repeat: 'none',
       yearKnown: true, person: '', ...created(user), updatedAt: serverTimestamp(),
     });
-    await assertSucceeds(addDoc(collection(dbAs(ANNA), 'households', 'h1', 'events'), entry(ANNA)));
-    await assertFails(addDoc(collection(dbAs(BEN), 'households', 'h1', 'events'), entry(BEN)));
-    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'households', 'h1', 'events', 'e1'), { time: '19:30', updatedAt: serverTimestamp() }));
+    await assertSucceeds(addDoc(collection(dbAs(ANNA), 'groups', GROUP, 'households', 'h1', 'events'), entry(ANNA)));
+    await assertFails(addDoc(collection(dbAs(BEN), 'groups', GROUP, 'households', 'h1', 'events'), entry(BEN)));
+    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'households', 'h1', 'events', 'e1'), { time: '19:30', updatedAt: serverTimestamp() }));
   });
 
   it('household tasks and polls are only for its members', async () => {
     const task = (user) => ({
       title: 'Müll', note: '', assignee: '', due: '', done: false, doneAt: null, doneBy: '', ...created(user), updatedAt: serverTimestamp(),
     });
-    const ref = await addDoc(collection(dbAs(ANNA), 'households', 'h1', 'tasks'), task(ANNA));
-    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'households', 'h1', 'tasks', ref.id), { done: true, doneAt: serverTimestamp(), doneBy: ADMIN.name, updatedAt: serverTimestamp() }));
-    await assertFails(updateDoc(doc(dbAs(BEN), 'households', 'h1', 'tasks', ref.id), { done: false, doneAt: null, doneBy: '', updatedAt: serverTimestamp() }));
-    await assertFails(addDoc(collection(dbAs(BEN), 'households', 'h1', 'tasks'), task(BEN)));
-    await assertSucceeds(getDocs(query(collection(dbAs(ANNA), 'households', 'h1', 'tasks'), where('done', '==', true), orderBy('doneAt', 'desc'), limit(20))));
+    const ref = await addDoc(collection(dbAs(ANNA), 'groups', GROUP, 'households', 'h1', 'tasks'), task(ANNA));
+    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'households', 'h1', 'tasks', ref.id), { done: true, doneAt: serverTimestamp(), doneBy: ADMIN.name, updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(doc(dbAs(BEN), 'groups', GROUP, 'households', 'h1', 'tasks', ref.id), { done: false, doneAt: null, doneBy: '', updatedAt: serverTimestamp() }));
+    await assertFails(addDoc(collection(dbAs(BEN), 'groups', GROUP, 'households', 'h1', 'tasks'), task(BEN)));
+    await assertSucceeds(getDocs(query(collection(dbAs(ANNA), 'groups', GROUP, 'households', 'h1', 'tasks'), where('done', '==', true), orderBy('doneAt', 'desc'), limit(20))));
 
     const poll = { question: 'Pizza?', options: ['Ja', 'Nein'], multi: false, closed: false, votes: {}, ...created(ANNA) };
-    const p = await addDoc(collection(dbAs(ANNA), 'households', 'h1', 'polls'), poll);
-    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'households', 'h1', 'polls', p.id), { [`votes.${ADMIN.uid}`]: [0] }));
-    await assertFails(updateDoc(doc(dbAs(BEN), 'households', 'h1', 'polls', p.id), { [`votes.${BEN.uid}`]: [1] }));
-    await assertFails(getDocs(collection(dbAs(BEN), 'households', 'h1', 'polls')));
+    const p = await addDoc(collection(dbAs(ANNA), 'groups', GROUP, 'households', 'h1', 'polls'), poll);
+    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'households', 'h1', 'polls', p.id), { [`votes.${ADMIN.uid}`]: [0] }));
+    await assertFails(updateDoc(doc(dbAs(BEN), 'groups', GROUP, 'households', 'h1', 'polls', p.id), { [`votes.${BEN.uid}`]: [1] }));
+    await assertFails(getDocs(collection(dbAs(BEN), 'groups', GROUP, 'households', 'h1', 'polls')));
   });
 
   it('the household chat room is only for its members', async () => {
     const send = (user, extra = {}) => {
       const db = dbAs(user);
       const batch = writeBatch(db);
-      batch.set(doc(collection(db, 'households', 'h1', 'rooms', 'main', 'messages')), {
+      batch.set(doc(collection(db, 'groups', GROUP, 'households', 'h1', 'rooms', 'main', 'messages')), {
         uid: user.uid, name: user.name, photo: user.picture, text: 'Bis später', createdAt: serverTimestamp(), ...extra,
       });
-      batch.update(doc(db, 'households', 'h1', 'rooms', 'main'), { last: { uid: user.uid, name: user.name, text: 'Bis später', at: serverTimestamp() } });
+      batch.update(doc(db, 'groups', GROUP, 'households', 'h1', 'rooms', 'main'), { last: { uid: user.uid, name: user.name, text: 'Bis später', at: serverTimestamp() } });
       return batch.commit();
     };
     await assertSucceeds(send(ANNA));
     await assertSucceeds(send(ANNA, { replyTo: { id: 'm1', name: 'Chef Familie', text: 'Hallo Zürich' } }));
     await assertFails(send(ANNA, { replyTo: { id: 'missing', name: 'X', text: 'X' } }));
     await assertFails(send(BEN));
-    await assertFails(getDocs(collection(dbAs(BEN), 'households', 'h1', 'rooms', 'main', 'messages')));
-    await assertSucceeds(updateDoc(doc(dbAs(ANNA), 'households', 'h1', 'rooms', 'main', 'messages', 'm1'), { 'reactions.like': arrayUnion(ANNA.uid) }));
-    await assertFails(updateDoc(doc(dbAs(ANNA), 'households', 'h1', 'rooms', 'main', 'messages', 'm1'), { text: 'Geändert' }));
-    await assertFails(setDoc(doc(dbAs(BEN), 'households', 'h2', 'rooms', 'other'), { name: 'Neben', createdAt: serverTimestamp() }));
-    await assertSucceeds(setDoc(doc(dbAs(BEN), 'households', 'h2', 'rooms', 'main'), { name: 'Bei Ben', createdAt: serverTimestamp() }));
+    await assertFails(getDocs(collection(dbAs(BEN), 'groups', GROUP, 'households', 'h1', 'rooms', 'main', 'messages')));
+    await assertSucceeds(updateDoc(doc(dbAs(ANNA), 'groups', GROUP, 'households', 'h1', 'rooms', 'main', 'messages', 'm1'), { 'reactions.like': arrayUnion(ANNA.uid) }));
+    await assertFails(updateDoc(doc(dbAs(ANNA), 'groups', GROUP, 'households', 'h1', 'rooms', 'main', 'messages', 'm1'), { text: 'Geändert' }));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'households', 'h2', 'rooms', 'other'), { name: 'Neben', createdAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'households', 'h2', 'rooms', 'main'), { name: 'Bei Ben', createdAt: serverTimestamp() }));
   });
 
   it('the household overview is read only, and only by its members', async () => {
-    await assertSucceeds(getDoc(doc(dbAs(ANNA), 'households', 'h1', 'digest', 'current')));
-    await assertFails(getDoc(doc(dbAs(BEN), 'households', 'h1', 'digest', 'current')));
-    await assertFails(setDoc(doc(dbAs(ANNA), 'households', 'h1', 'digest', 'current'), { de: 'Gefälscht' }));
+    await assertSucceeds(getDoc(doc(dbAs(ANNA), 'groups', GROUP, 'households', 'h1', 'digest', 'current')));
+    await assertFails(getDoc(doc(dbAs(BEN), 'groups', GROUP, 'households', 'h1', 'digest', 'current')));
+    await assertFails(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'households', 'h1', 'digest', 'current'), { de: 'Gefälscht' }));
   });
 });
 
@@ -232,9 +233,9 @@ describe('calendar entries for a person', () => {
       title: 'Zahnarzt', date: '2026-11-03', endDate: '', time: '09:00', place: '', note: '', kind: 'event', repeat: 'none',
       yearKnown: true, person, ...created(ANNA), updatedAt: serverTimestamp(),
     });
-    await assertSucceeds(addDoc(collection(dbAs(ANNA), 'events'), entry(BEN.email)));
-    await assertSucceeds(addDoc(collection(dbAs(ANNA), 'events'), entry('')));
-    await assertFails(addDoc(collection(dbAs(ANNA), 'events'), entry('Ben')));
-    await assertFails(addDoc(collection(dbAs(ANNA), 'events'), entry(42)));
+    await assertSucceeds(addDoc(collection(dbAs(ANNA), 'groups', GROUP, 'events'), entry(BEN.email)));
+    await assertSucceeds(addDoc(collection(dbAs(ANNA), 'groups', GROUP, 'events'), entry('')));
+    await assertFails(addDoc(collection(dbAs(ANNA), 'groups', GROUP, 'events'), entry('Ben')));
+    await assertFails(addDoc(collection(dbAs(ANNA), 'groups', GROUP, 'events'), entry(42)));
   });
 });

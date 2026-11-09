@@ -20,7 +20,7 @@ export const FAMILY_STRINGS = {
     'more.weather': 'Wo die Familie wohnt',
     'more.markets': 'US Kurse und Watchlist',
     'more.risk': 'Kennzahlen der Watchlist',
-    'more.settings': 'Sprache, Zugang, Watchlist',
+    'more.settings': 'Sprache, Hell oder dunkel, Watchlist',
 
     'common.back': 'Zurück',
     'common.close': 'Schließen',
@@ -286,7 +286,7 @@ export const FAMILY_STRINGS = {
     'more.weather': 'Where the family lives',
     'more.markets': 'US prices and watchlist',
     'more.risk': 'Watchlist figures',
-    'more.settings': 'Language, access, watchlist',
+    'more.settings': 'Language, light or dark, watchlist',
 
     'common.back': 'Back',
     'common.close': 'Close',
@@ -552,7 +552,7 @@ export const FAMILY_STRINGS = {
     'more.weather': 'Là où vit la famille',
     'more.markets': 'Cours US et liste de suivi',
     'more.risk': 'Indicateurs de la liste',
-    'more.settings': 'Langue, accès, liste de suivi',
+    'more.settings': 'Langue, clair ou sombre, liste de suivi',
 
     'common.back': 'Retour',
     'common.close': 'Fermer',

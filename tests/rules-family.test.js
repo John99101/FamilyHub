@@ -8,6 +8,7 @@ import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, collection, getDocs, query, where, orderBy, limit,
   serverTimestamp, Timestamp, arrayUnion, arrayRemove, deleteField, writeBatch, setLogLevel,
 } from 'firebase/firestore';
+import { GROUP, seedGroup } from './group-seed.js';
 
 setLogLevel('silent');
 
@@ -39,27 +40,27 @@ after(async () => { await env?.cleanup(); });
 beforeEach(async () => {
   await env.clearFirestore();
   await seed(async (db) => {
-    await setDoc(doc(db, 'config', 'access'), { members: [ANNA.email, BEN.email], admins: [ADMIN.email] });
-    await setDoc(doc(db, 'rooms', 'familie'), { name: 'Familie', createdAt: Timestamp.now() });
-    await setDoc(doc(db, 'rooms', 'familie', 'messages', 'm1'), {
+    await seedGroup(db, { admins: [ADMIN], members: [ANNA, BEN] });
+    await setDoc(doc(db, 'groups', GROUP, 'rooms', 'familie'), { name: 'Familie', createdAt: Timestamp.now() });
+    await setDoc(doc(db, 'groups', GROUP, 'rooms', 'familie', 'messages', 'm1'), {
       uid: BEN.uid, name: BEN.name, photo: BEN.picture, text: 'Hallo', createdAt: Timestamp.now(),
     });
-    await setDoc(doc(db, 'rooms', 'eltern'), { name: 'Eltern', open: false, members: [ADMIN.email, ANNA.email], ...seededBy(ANNA) });
-    await setDoc(doc(db, 'rooms', 'eltern', 'messages', 'e1'), {
+    await setDoc(doc(db, 'groups', GROUP, 'rooms', 'eltern'), { name: 'Eltern', open: false, members: [ADMIN.email, ANNA.email], ...seededBy(ANNA) });
+    await setDoc(doc(db, 'groups', GROUP, 'rooms', 'eltern', 'messages', 'e1'), {
       uid: ANNA.uid, name: ANNA.name, photo: ANNA.picture, text: 'Geschenk für Ben?', createdAt: Timestamp.now(),
     });
-    await setDoc(doc(db, 'rooms', 'urlaub'), { name: 'Urlaub', open: true, members: [], ...seededBy(BEN) });
-    await setDoc(doc(db, 'events', 'ev1'), validEventData(ANNA, { createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
-    await setDoc(doc(db, 'tasks', 't1'), validTaskData(ANNA, { createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
-    await setDoc(doc(db, 'tasks', 'tdone'), validTaskData(ANNA, {
+    await setDoc(doc(db, 'groups', GROUP, 'rooms', 'urlaub'), { name: 'Urlaub', open: true, members: [], ...seededBy(BEN) });
+    await setDoc(doc(db, 'groups', GROUP, 'events', 'ev1'), validEventData(ANNA, { createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
+    await setDoc(doc(db, 'groups', GROUP, 'tasks', 't1'), validTaskData(ANNA, { createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
+    await setDoc(doc(db, 'groups', GROUP, 'tasks', 'tdone'), validTaskData(ANNA, {
       createdAt: Timestamp.now(), updatedAt: Timestamp.now(), done: true, doneAt: Timestamp.now(), doneBy: 'Anna',
     }));
-    await setDoc(doc(db, 'polls', 'p1'), { ...validPollData(ANNA), createdAt: Timestamp.now() });
-    await setDoc(doc(db, 'polls', 'pmulti'), { ...validPollData(ANNA), multi: true, createdAt: Timestamp.now() });
-    await setDoc(doc(db, 'recipes', 'r1'), validRecipeData(ANNA, { createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
-    await setDoc(doc(db, 'contacts', 'c1'), validContactData(ADMIN, { updatedAt: Timestamp.now() }));
-    await setDoc(doc(db, 'places', 'pl1'), { name: 'Berlin', country: 'Deutschland', lat: 52.52, lon: 13.41, ...seededBy(ANNA) });
-    await setDoc(doc(db, 'digest', 'current'), { de: 'Text', en: 'Text', fr: 'Texte' });
+    await setDoc(doc(db, 'groups', GROUP, 'polls', 'p1'), { ...validPollData(ANNA), createdAt: Timestamp.now() });
+    await setDoc(doc(db, 'groups', GROUP, 'polls', 'pmulti'), { ...validPollData(ANNA), multi: true, createdAt: Timestamp.now() });
+    await setDoc(doc(db, 'groups', GROUP, 'recipes', 'r1'), validRecipeData(ANNA, { createdAt: Timestamp.now(), updatedAt: Timestamp.now() }));
+    await setDoc(doc(db, 'groups', GROUP, 'contacts', 'c1'), validContactData(ADMIN, { updatedAt: Timestamp.now() }));
+    await setDoc(doc(db, 'groups', GROUP, 'places', 'pl1'), { name: 'Berlin', country: 'Deutschland', lat: 52.52, lon: 13.41, ...seededBy(ANNA) });
+    await setDoc(doc(db, 'groups', GROUP, 'digest', 'current'), { de: 'Text', en: 'Text', fr: 'Texte' });
   });
 });
 
@@ -102,17 +103,17 @@ describe('people', () => {
   const profile = (user, overrides = {}) => ({ name: user.name, mail: user.email, photo: user.picture, updatedAt: serverTimestamp(), ...overrides });
 
   it('members write their own profile exactly as Google gave it; everyone in the family reads it', async () => {
-    await assertSucceeds(setDoc(doc(dbAs(ANNA), 'people', ANNA.uid), profile(ANNA)));
-    await assertSucceeds(getDoc(doc(dbAs(BEN), 'people', ANNA.uid)));
-    await assertFails(setDoc(doc(dbAs(ANNA), 'people', BEN.uid), profile(ANNA)));
-    await assertFails(setDoc(doc(dbAs(ANNA), 'people', ANNA.uid), profile(ANNA, { name: 'Königin Anna' })));
-    await assertFails(setDoc(doc(dbAs(ANNA), 'people', ANNA.uid), profile(ANNA, { mail: 'other@example.com' })));
-    await assertFails(setDoc(doc(dbAs(ANNA), 'people', ANNA.uid), profile(ANNA, { admin: true })));
+    await assertSucceeds(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'people', ANNA.uid), profile(ANNA)));
+    await assertSucceeds(getDoc(doc(dbAs(BEN), 'groups', GROUP, 'people', ANNA.uid)));
+    await assertFails(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'people', BEN.uid), profile(ANNA)));
+    await assertFails(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'people', ANNA.uid), profile(ANNA, { name: 'Königin Anna' })));
+    await assertFails(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'people', ANNA.uid), profile(ANNA, { mail: 'other@example.com' })));
+    await assertFails(setDoc(doc(dbAs(ANNA), 'groups', GROUP, 'people', ANNA.uid), profile(ANNA, { admin: true })));
   });
 
   it('strangers can neither write nor read profiles', async () => {
-    await assertFails(setDoc(doc(dbAs(STRANGER), 'people', STRANGER.uid), profile(STRANGER)));
-    await assertFails(getDoc(doc(dbAs(STRANGER), 'people', ANNA.uid)));
+    await assertFails(setDoc(doc(dbAs(STRANGER), 'groups', GROUP, 'people', STRANGER.uid), profile(STRANGER)));
+    await assertFails(getDoc(doc(dbAs(STRANGER), 'groups', GROUP, 'people', ANNA.uid)));
   });
 });
 
@@ -122,58 +123,58 @@ describe('chat rooms', () => {
   const room = (user, overrides = {}) => ({ name: 'Ausflug', open: true, members: [], ...created(user), ...overrides });
 
   it('members open rooms for everyone or for chosen people (always including themselves)', async () => {
-    await assertSucceeds(setDoc(doc(dbAs(BEN), 'rooms', 'r_open'), room(BEN)));
-    await assertSucceeds(setDoc(doc(dbAs(BEN), 'rooms', 'r_closed'), room(BEN, { open: false, members: [BEN.email, ANNA.email] })));
-    await assertFails(setDoc(doc(dbAs(BEN), 'rooms', 'r_without_me'), room(BEN, { open: false, members: [ANNA.email] })));
-    await assertFails(setDoc(doc(dbAs(BEN), 'rooms', 'r_long'), room(BEN, { name: 'x'.repeat(41) })));
-    await assertFails(setDoc(doc(dbAs(BEN), 'rooms', 'r_badmail'), room(BEN, { open: false, members: [BEN.email, 'Anna@Example.com'] })));
-    await assertFails(setDoc(doc(dbAs(BEN), 'rooms', 'r_other'), room(BEN, { createdBy: ANNA.uid })));
-    await assertFails(setDoc(doc(dbAs(BEN), 'rooms', 'r_last'), room(BEN, { last: { uid: BEN.uid, name: BEN.name, text: 'x', at: serverTimestamp() } })));
-    await assertFails(setDoc(doc(dbAs(STRANGER), 'rooms', 'r_x'), room(STRANGER)));
+    await assertSucceeds(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'r_open'), room(BEN)));
+    await assertSucceeds(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'r_closed'), room(BEN, { open: false, members: [BEN.email, ANNA.email] })));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'r_without_me'), room(BEN, { open: false, members: [ANNA.email] })));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'r_long'), room(BEN, { name: 'x'.repeat(41) })));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'r_badmail'), room(BEN, { open: false, members: [BEN.email, 'Anna@Example.com'] })));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'r_other'), room(BEN, { createdBy: ANNA.uid })));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'r_last'), room(BEN, { last: { uid: BEN.uid, name: BEN.name, text: 'x', at: serverTimestamp() } })));
+    await assertFails(setDoc(doc(dbAs(STRANGER), 'groups', GROUP, 'rooms', 'r_x'), room(STRANGER)));
   });
 
   it('the room list works with the two queries the app uses (open rooms, rooms I am in)', async () => {
-    await assertSucceeds(getDocs(query(collection(dbAs(BEN), 'rooms'), where('open', '==', true))));
-    await assertSucceeds(getDocs(query(collection(dbAs(BEN), 'rooms'), where('members', 'array-contains', BEN.email))));
+    await assertSucceeds(getDocs(query(collection(dbAs(BEN), 'groups', GROUP, 'rooms'), where('open', '==', true))));
+    await assertSucceeds(getDocs(query(collection(dbAs(BEN), 'groups', GROUP, 'rooms'), where('members', 'array-contains', BEN.email))));
     // Asking for all rooms at once is refused, because closed rooms of others would be in it.
-    await assertFails(getDocs(collection(dbAs(BEN), 'rooms')));
+    await assertFails(getDocs(collection(dbAs(BEN), 'groups', GROUP, 'rooms')));
   });
 
   it('a closed room and its messages are only for the people in it', async () => {
-    await assertSucceeds(getDoc(doc(dbAs(ANNA), 'rooms', 'eltern')));
-    await assertSucceeds(getDocs(collection(dbAs(ANNA), 'rooms', 'eltern', 'messages')));
-    await assertFails(getDoc(doc(dbAs(BEN), 'rooms', 'eltern')));
-    await assertFails(getDocs(collection(dbAs(BEN), 'rooms', 'eltern', 'messages')));
-    await assertFails(getDoc(doc(dbAs(BEN), 'rooms', 'eltern', 'messages', 'e1')));
-    await assertFails(addDoc(collection(dbAs(BEN), 'rooms', 'eltern', 'messages'), {
+    await assertSucceeds(getDoc(doc(dbAs(ANNA), 'groups', GROUP, 'rooms', 'eltern')));
+    await assertSucceeds(getDocs(collection(dbAs(ANNA), 'groups', GROUP, 'rooms', 'eltern', 'messages')));
+    await assertFails(getDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'eltern')));
+    await assertFails(getDocs(collection(dbAs(BEN), 'groups', GROUP, 'rooms', 'eltern', 'messages')));
+    await assertFails(getDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'eltern', 'messages', 'e1')));
+    await assertFails(addDoc(collection(dbAs(BEN), 'groups', GROUP, 'rooms', 'eltern', 'messages'), {
       uid: BEN.uid, name: BEN.name, photo: BEN.picture, text: 'Hallo?', createdAt: serverTimestamp(),
     }));
   });
 
   it('only the person who set up a room renames it or changes who is in it', async () => {
-    await assertSucceeds(updateDoc(doc(dbAs(ANNA), 'rooms', 'eltern'), { name: 'Eltern und Oma', members: arrayUnion(BEN.email) }));
-    await assertFails(updateDoc(doc(dbAs(ADMIN), 'rooms', 'eltern'), { name: 'Neu' }));
-    await assertFails(updateDoc(doc(dbAs(BEN), 'rooms', 'urlaub'), { createdBy: ANNA.uid }));
-    await assertFails(updateDoc(doc(dbAs(ANNA), 'rooms', 'urlaub'), { name: 'Meins' }));
-    await assertFails(updateDoc(doc(dbAs(ANNA), 'rooms', 'eltern'), { members: [ADMIN.email] }));
-    await assertFails(updateDoc(doc(dbAs(ADMIN), 'rooms', 'familie'), { name: 'Anders' }));
+    await assertSucceeds(updateDoc(doc(dbAs(ANNA), 'groups', GROUP, 'rooms', 'eltern'), { name: 'Eltern und Oma', members: arrayUnion(BEN.email) }));
+    await assertFails(updateDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'rooms', 'eltern'), { name: 'Neu' }));
+    await assertFails(updateDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'urlaub'), { createdBy: ANNA.uid }));
+    await assertFails(updateDoc(doc(dbAs(ANNA), 'groups', GROUP, 'rooms', 'urlaub'), { name: 'Meins' }));
+    await assertFails(updateDoc(doc(dbAs(ANNA), 'groups', GROUP, 'rooms', 'eltern'), { members: [ADMIN.email] }));
+    await assertFails(updateDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'rooms', 'familie'), { name: 'Anders' }));
   });
 
   it('creator or admin deletes a room; the main room cannot be deleted', async () => {
-    await assertFails(deleteDoc(doc(dbAs(ANNA), 'rooms', 'urlaub')));
-    await assertSucceeds(deleteDoc(doc(dbAs(BEN), 'rooms', 'urlaub')));
-    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'rooms', 'eltern')));
-    await assertFails(deleteDoc(doc(dbAs(ADMIN), 'rooms', 'familie')));
+    await assertFails(deleteDoc(doc(dbAs(ANNA), 'groups', GROUP, 'rooms', 'urlaub')));
+    await assertSucceeds(deleteDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'urlaub')));
+    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'rooms', 'eltern')));
+    await assertFails(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'rooms', 'familie')));
   });
 
   it('a message and the room preview are written together; the preview must be honest', async () => {
     const send = (user, roomId, last) => {
       const db = dbAs(user);
       const batch = writeBatch(db);
-      batch.set(doc(collection(db, 'rooms', roomId, 'messages')), {
+      batch.set(doc(collection(db, 'groups', GROUP, 'rooms', roomId, 'messages')), {
         uid: user.uid, name: user.name, photo: user.picture, text: 'Bin unterwegs', createdAt: serverTimestamp(),
       });
-      batch.update(doc(db, 'rooms', roomId), { last });
+      batch.update(doc(db, 'groups', GROUP, 'rooms', roomId), { last });
       return batch.commit();
     };
     const last = (user, overrides = {}) => ({ uid: user.uid, name: user.name, text: 'Bin unterwegs', at: serverTimestamp(), ...overrides });
@@ -191,7 +192,7 @@ describe('chat rooms', () => {
 
 describe('replies and reactions', () => {
   const msg = (overrides = {}) => ({ uid: ANNA.uid, name: ANNA.name, photo: ANNA.picture, text: 'Ja!', createdAt: serverTimestamp(), ...overrides });
-  const familie = (db) => collection(db, 'rooms', 'familie', 'messages');
+  const familie = (db) => collection(db, 'groups', GROUP, 'rooms', 'familie', 'messages');
 
   it('a reply points to an existing message in the same room', async () => {
     await assertSucceeds(addDoc(familie(dbAs(ANNA)), msg({ replyTo: { id: 'm1', name: 'Ben', text: 'Hallo' } })));
@@ -202,7 +203,7 @@ describe('replies and reactions', () => {
   });
 
   it('members add and take back their own reactions', async () => {
-    const ref = (user) => doc(dbAs(user), 'rooms', 'familie', 'messages', 'm1');
+    const ref = (user) => doc(dbAs(user), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm1');
     await assertSucceeds(updateDoc(ref(ANNA), { 'reactions.like': arrayUnion(ANNA.uid) }));
     await assertSucceeds(updateDoc(ref(ADMIN), { 'reactions.like': arrayUnion(ADMIN.uid) }));
     await assertSucceeds(updateDoc(ref(ANNA), { 'reactions.love': arrayUnion(ANNA.uid) }));
@@ -215,26 +216,26 @@ describe('replies and reactions', () => {
   });
 
   it('nobody reacts for someone else, uses unknown reactions, or changes the text with it', async () => {
-    const ref = doc(dbAs(ANNA), 'rooms', 'familie', 'messages', 'm1');
+    const ref = doc(dbAs(ANNA), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm1');
     await assertFails(updateDoc(ref, { 'reactions.like': arrayUnion(BEN.uid) }));
     await assertFails(updateDoc(ref, { 'reactions.like': [ANNA.uid, ANNA.uid] }));
     await assertFails(updateDoc(ref, { 'reactions.angry': arrayUnion(ANNA.uid) }));
     await assertFails(updateDoc(ref, { 'reactions.like': arrayUnion(ANNA.uid), text: 'Geändert' }));
-    await assertFails(updateDoc(doc(dbAs(BEN), 'rooms', 'eltern', 'messages', 'e1'), { 'reactions.like': arrayUnion(BEN.uid) }));
-    await assertFails(updateDoc(doc(dbAs(STRANGER), 'rooms', 'familie', 'messages', 'm1'), { 'reactions.like': arrayUnion(STRANGER.uid) }));
+    await assertFails(updateDoc(doc(dbAs(BEN), 'groups', GROUP, 'rooms', 'eltern', 'messages', 'e1'), { 'reactions.like': arrayUnion(BEN.uid) }));
+    await assertFails(updateDoc(doc(dbAs(STRANGER), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm1'), { 'reactions.like': arrayUnion(STRANGER.uid) }));
   });
 
   it('removing someone else\'s reaction is refused', async () => {
-    await seed((db) => updateDoc(doc(db, 'rooms', 'familie', 'messages', 'm1'), { reactions: { like: [BEN.uid] } }));
-    await assertFails(updateDoc(doc(dbAs(ANNA), 'rooms', 'familie', 'messages', 'm1'), { 'reactions.like': arrayRemove(BEN.uid) }));
-    await assertFails(updateDoc(doc(dbAs(ANNA), 'rooms', 'familie', 'messages', 'm1'), { reactions: deleteField() }));
+    await seed((db) => updateDoc(doc(db, 'groups', GROUP, 'rooms', 'familie', 'messages', 'm1'), { reactions: { like: [BEN.uid] } }));
+    await assertFails(updateDoc(doc(dbAs(ANNA), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm1'), { 'reactions.like': arrayRemove(BEN.uid) }));
+    await assertFails(updateDoc(doc(dbAs(ANNA), 'groups', GROUP, 'rooms', 'familie', 'messages', 'm1'), { reactions: deleteField() }));
   });
 });
 
 // ---------- calendar ----------
 
 describe('calendar', () => {
-  const add = (user, overrides) => setDoc(doc(dbAs(user), 'events', `e_${Math.random().toString(36).slice(2)}`), validEventData(user, overrides));
+  const add = (user, overrides) => setDoc(doc(dbAs(user), 'groups', GROUP, 'events', `e_${Math.random().toString(36).slice(2)}`), validEventData(user, overrides));
 
   it('members add appointments and birthdays', async () => {
     await assertSucceeds(add(BEN));
@@ -262,7 +263,7 @@ describe('calendar', () => {
   });
 
   it('creator or admin change and delete an entry; others only read', async () => {
-    const ref = (user) => doc(dbAs(user), 'events', 'ev1');
+    const ref = (user) => doc(dbAs(user), 'groups', GROUP, 'events', 'ev1');
     await assertSucceeds(getDoc(ref(BEN)));
     await assertFails(updateDoc(ref(BEN), { title: 'Mein Termin', updatedAt: serverTimestamp() }));
     await assertFails(deleteDoc(ref(BEN)));
@@ -273,7 +274,7 @@ describe('calendar', () => {
   });
 
   it('the calendar queries the app uses are allowed', async () => {
-    const events = collection(dbAs(BEN), 'events');
+    const events = collection(dbAs(BEN), 'groups', GROUP, 'events');
     await assertSucceeds(getDocs(query(events, where('date', '>=', '2026-09-01'))));
     await assertSucceeds(getDocs(query(events, where('repeat', '==', 'yearly'))));
   });
@@ -282,7 +283,7 @@ describe('calendar', () => {
 // ---------- tasks ----------
 
 describe('tasks', () => {
-  const ref = (user, id = 't1') => doc(dbAs(user), 'tasks', id);
+  const ref = (user, id = 't1') => doc(dbAs(user), 'groups', GROUP, 'tasks', id);
 
   it('members add tasks for themselves, someone on the list, or nobody', async () => {
     await assertSucceeds(setDoc(ref(BEN, 'new1'), validTaskData(BEN)));
@@ -314,7 +315,7 @@ describe('tasks', () => {
   });
 
   it('the task queries the app uses are allowed', async () => {
-    const tasks = collection(dbAs(BEN), 'tasks');
+    const tasks = collection(dbAs(BEN), 'groups', GROUP, 'tasks');
     await assertSucceeds(getDocs(query(tasks, where('done', '==', false))));
     await assertSucceeds(getDocs(query(tasks, where('done', '==', true), orderBy('doneAt', 'desc'), limit(20))));
   });
@@ -323,7 +324,7 @@ describe('tasks', () => {
 // ---------- polls ----------
 
 describe('polls', () => {
-  const ref = (user, id = 'p1') => doc(dbAs(user), 'polls', id);
+  const ref = (user, id = 'p1') => doc(dbAs(user), 'groups', GROUP, 'polls', id);
   const vote = (user, choice, id = 'p1') => updateDoc(ref(user, id), { [`votes.${user.uid}`]: choice });
 
   it('members start polls with 2 to 10 different answers', async () => {
@@ -373,31 +374,31 @@ describe('polls', () => {
 
 describe('recipes', () => {
   it('members add recipes; creator or admin change and delete them', async () => {
-    await assertSucceeds(setDoc(doc(dbAs(BEN), 'recipes', 'new'), validRecipeData(BEN)));
-    await assertFails(setDoc(doc(dbAs(BEN), 'recipes', 'bad'), validRecipeData(BEN, { category: 'snack' })));
-    await assertFails(setDoc(doc(dbAs(BEN), 'recipes', 'long'), validRecipeData(BEN, { steps: 'x'.repeat(8001) })));
-    await assertFails(updateDoc(doc(dbAs(BEN), 'recipes', 'r1'), { title: 'Bens Kuchen', updatedAt: serverTimestamp() }));
-    await assertSucceeds(updateDoc(doc(dbAs(ANNA), 'recipes', 'r1'), { servings: '16 Stück', updatedAt: serverTimestamp() }));
-    await assertFails(deleteDoc(doc(dbAs(BEN), 'recipes', 'r1')));
-    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'recipes', 'r1')));
-    await assertFails(getDoc(doc(dbAs(STRANGER), 'recipes', 'r1')));
+    await assertSucceeds(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'recipes', 'new'), validRecipeData(BEN)));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'recipes', 'bad'), validRecipeData(BEN, { category: 'snack' })));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'recipes', 'long'), validRecipeData(BEN, { steps: 'x'.repeat(8001) })));
+    await assertFails(updateDoc(doc(dbAs(BEN), 'groups', GROUP, 'recipes', 'r1'), { title: 'Bens Kuchen', updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(dbAs(ANNA), 'groups', GROUP, 'recipes', 'r1'), { servings: '16 Stück', updatedAt: serverTimestamp() }));
+    await assertFails(deleteDoc(doc(dbAs(BEN), 'groups', GROUP, 'recipes', 'r1')));
+    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'recipes', 'r1')));
+    await assertFails(getDoc(doc(dbAs(STRANGER), 'groups', GROUP, 'recipes', 'r1')));
   });
 });
 
 describe('contacts and emergency info', () => {
   it('everyone in the family reads, only admins write', async () => {
-    await assertSucceeds(getDocs(collection(dbAs(BEN), 'contacts')));
-    await assertFails(getDocs(collection(dbAs(STRANGER), 'contacts')));
-    await assertFails(setDoc(doc(dbAs(BEN), 'contacts', 'new'), validContactData(BEN)));
-    await assertFails(updateDoc(doc(dbAs(BEN), 'contacts', 'c1'), { phone: '+49 30 999999', updatedAt: serverTimestamp(), updatedBy: BEN.email }));
-    await assertFails(deleteDoc(doc(dbAs(BEN), 'contacts', 'c1')));
-    await assertSucceeds(setDoc(doc(dbAs(ADMIN), 'contacts', 'new'), validContactData(ADMIN)));
-    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'contacts', 'c1'), { phone: '030 999 999', updatedAt: serverTimestamp(), updatedBy: ADMIN.email }));
-    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'contacts', 'c1')));
+    await assertSucceeds(getDocs(collection(dbAs(BEN), 'groups', GROUP, 'contacts')));
+    await assertFails(getDocs(collection(dbAs(STRANGER), 'groups', GROUP, 'contacts')));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'contacts', 'new'), validContactData(BEN)));
+    await assertFails(updateDoc(doc(dbAs(BEN), 'groups', GROUP, 'contacts', 'c1'), { phone: '+49 30 999999', updatedAt: serverTimestamp(), updatedBy: BEN.email }));
+    await assertFails(deleteDoc(doc(dbAs(BEN), 'groups', GROUP, 'contacts', 'c1')));
+    await assertSucceeds(setDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'contacts', 'new'), validContactData(ADMIN)));
+    await assertSucceeds(updateDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'contacts', 'c1'), { phone: '030 999 999', updatedAt: serverTimestamp(), updatedBy: ADMIN.email }));
+    await assertSucceeds(deleteDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'contacts', 'c1')));
   });
 
   it('phone numbers, mail and group are checked', async () => {
-    const add = (overrides) => setDoc(doc(dbAs(ADMIN), 'contacts', 'x'), validContactData(ADMIN, overrides));
+    const add = (overrides) => setDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'contacts', 'x'), validContactData(ADMIN, overrides));
     await assertFails(add({ phone: 'javascript:alert(1)' }));
     await assertFails(add({ phone2: '0'.repeat(41) }));
     await assertFails(add({ mail: 'not a mail' }));
@@ -411,27 +412,27 @@ describe('places for the weather', () => {
   const place = (user, overrides = {}) => ({ name: 'Paris', country: 'France', lat: 48.85, lon: 2.35, ...created(user), ...overrides });
 
   it('members add places with valid coordinates; creator or admin remove them', async () => {
-    await assertSucceeds(setDoc(doc(dbAs(BEN), 'places', 'new'), place(BEN)));
-    await assertSucceeds(setDoc(doc(dbAs(BEN), 'places', 'int'), place(BEN, { lat: 48, lon: 2 })));
-    await assertFails(setDoc(doc(dbAs(BEN), 'places', 'lat'), place(BEN, { lat: 91 })));
-    await assertFails(setDoc(doc(dbAs(BEN), 'places', 'lon'), place(BEN, { lon: '2.35' })));
-    await assertFails(updateDoc(doc(dbAs(ANNA), 'places', 'pl1'), { name: 'Hamburg' }));
-    await assertFails(deleteDoc(doc(dbAs(BEN), 'places', 'pl1')));
-    await assertSucceeds(deleteDoc(doc(dbAs(ANNA), 'places', 'pl1')));
+    await assertSucceeds(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'places', 'new'), place(BEN)));
+    await assertSucceeds(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'places', 'int'), place(BEN, { lat: 48, lon: 2 })));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'places', 'lat'), place(BEN, { lat: 91 })));
+    await assertFails(setDoc(doc(dbAs(BEN), 'groups', GROUP, 'places', 'lon'), place(BEN, { lon: '2.35' })));
+    await assertFails(updateDoc(doc(dbAs(ANNA), 'groups', GROUP, 'places', 'pl1'), { name: 'Hamburg' }));
+    await assertFails(deleteDoc(doc(dbAs(BEN), 'groups', GROUP, 'places', 'pl1')));
+    await assertSucceeds(deleteDoc(doc(dbAs(ANNA), 'groups', GROUP, 'places', 'pl1')));
   });
 });
 
 describe('weekly overview', () => {
   it('members read the overview; nobody writes it from the app; admins switch it', async () => {
-    await assertSucceeds(getDoc(doc(dbAs(BEN), 'digest', 'current')));
-    await assertFails(getDoc(doc(dbAs(STRANGER), 'digest', 'current')));
-    await assertFails(setDoc(doc(dbAs(ADMIN), 'digest', 'current'), { de: 'Gefälscht' }));
-    const sw = (user, overrides = {}) => setDoc(doc(dbAs(user), 'config', 'digest'), {
+    await assertSucceeds(getDoc(doc(dbAs(BEN), 'groups', GROUP, 'digest', 'current')));
+    await assertFails(getDoc(doc(dbAs(STRANGER), 'groups', GROUP, 'digest', 'current')));
+    await assertFails(setDoc(doc(dbAs(ADMIN), 'groups', GROUP, 'digest', 'current'), { de: 'Gefälscht' }));
+    const sw = (user, overrides = {}) => setDoc(doc(dbAs(user), 'groups', GROUP, 'config', 'digest'), {
       enabled: false, updatedAt: serverTimestamp(), updatedBy: user.email, ...overrides,
     });
     await assertFails(sw(BEN));
     await assertFails(sw(ADMIN, { enabled: 'no' }));
     await assertSucceeds(sw(ADMIN));
-    await assertSucceeds(getDoc(doc(dbAs(BEN), 'config', 'digest')));
+    await assertSucceeds(getDoc(doc(dbAs(BEN), 'groups', GROUP, 'config', 'digest')));
   });
 });

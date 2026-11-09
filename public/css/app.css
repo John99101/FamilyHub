@@ -2,42 +2,47 @@
 
 :root {
   color-scheme: light;
-  --bg: #f4f6f8;
+  --bg: var(--g-bg-l, #f4f6f8);
   --surface: #ffffff;
   --surface-2: #eef1f4;
   --border: #dde2e8;
   --text: #16191d;
   --muted: #5d6874;
-  --primary: #0f766e;
-  --primary-strong: #0b5f58;
-  --on-primary: #ffffff;
-  --bubble-own: #d5f0ec;
+  --primary: var(--g-primary-l, #0f766e);
+  --primary-strong: var(--g-primary-strong-l, #0b5f58);
+  --on-primary: var(--g-on-primary-l, #ffffff);
+  --bubble-own: var(--g-bubble-l, #d5f0ec);
+  --accent: var(--g-accent-l, #b45309);
+  --pattern: var(--g-pattern-l, none);
   --bubble-other: #ffffff;
   --danger: #b42318;
   --up: #157f3b;
   --down: #c0262d;
   --focus: #2563eb;
   --shadow: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 10%);
-  --radius: 14px;
+  --radius: var(--g-radius, 14px);
   --tabbar-h: 60px;
   --topbar-h: 52px;
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font: var(--g-font, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  --font-heading: var(--g-font-heading, var(--font));
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0e1114;
+    --bg: var(--g-bg-d, #0e1114);
     --surface: #171b20;
     --surface-2: #20262d;
     --border: #2c333b;
     --text: #e7eaee;
     --muted: #9aa5b1;
-    --primary: #2cc5b4;
-    --primary-strong: #5fd8ca;
-    --on-primary: #06201d;
-    --bubble-own: #134640;
+    --primary: var(--g-primary-d, #2cc5b4);
+    --primary-strong: var(--g-primary-strong-d, #5fd8ca);
+    --on-primary: var(--g-on-primary-d, #06201d);
+    --bubble-own: var(--g-bubble-d, #134640);
     --bubble-other: #1d2329;
+    --accent: var(--g-accent-d, #f59e0b);
+    --pattern: var(--g-pattern-d, none);
     --danger: #ff7a70;
     --up: #4ade80;
     --down: #ff7b81;
@@ -48,17 +53,19 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0e1114;
+  --bg: var(--g-bg-d, #0e1114);
   --surface: #171b20;
   --surface-2: #20262d;
   --border: #2c333b;
   --text: #e7eaee;
   --muted: #9aa5b1;
-  --primary: #2cc5b4;
-  --primary-strong: #5fd8ca;
-  --on-primary: #06201d;
-  --bubble-own: #134640;
+  --primary: var(--g-primary-d, #2cc5b4);
+  --primary-strong: var(--g-primary-strong-d, #5fd8ca);
+  --on-primary: var(--g-on-primary-d, #06201d);
+  --bubble-own: var(--g-bubble-d, #134640);
   --bubble-other: #1d2329;
+  --accent: var(--g-accent-d, #f59e0b);
+  --pattern: var(--g-pattern-d, none);
   --danger: #ff7a70;
   --up: #4ade80;
   --down: #ff7b81;
@@ -72,7 +79,8 @@ html, body { height: 100%; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: var(--pattern);
   color: var(--text);
   font-family: var(--font);
   font-size: 16px;
@@ -82,6 +90,13 @@ body {
 }
 
 [hidden] { display: none !important; }
+
+h1, h2 { font-family: var(--font-heading); }
+
+/* Compact spacing (a group look): less room around cards and pages. */
+:root.compact .content { padding: 10px; }
+:root.compact .card { padding: 12px; margin-bottom: 10px; }
+:root.compact .card h2 { margin-bottom: 8px; }
 
 button, input, textarea, select { font: inherit; color: inherit; }
 

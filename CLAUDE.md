@@ -1,6 +1,6 @@
 # FamilyHub
 
-A private family website and installable app (about 5 to 15 people) on Firebase only: chat with Claude translations, calendar, tasks, polls, trips, notice board, family tree, question of the day, recipes, contacts, weather, a simple mode for grandparents, plus a markets page with risk figures. Access is a Google sign in plus an allow list. What matters most: the security rules, the family's privacy, and never touching the live project by accident. Full feature list and data model: `README.md`; owner setup and costs: `SETUP.md`.
+A private website and installable app for families and other groups (about 5 to 15 people each) on Firebase only: chat with Claude translations, calendar, tasks, polls, trips, notice board, family tree, question of the day, recipes, contacts, weather, a simple mode for grandparents, plus a markets page with risk figures. Sign in with Google or mail and password; everything lives inside groups people join with a group code and password (checked by a callable function). What matters most: the security rules, the family's privacy, and never touching the live project by accident. Full feature list and data model: `README.md`; owner setup and costs: `SETUP.md`.
 
 ## Tech stack
 
@@ -23,9 +23,9 @@ There is no linter, formatter or type checker.
 
 ## Architecture
 
-- `public/` the website. `js/app.js` signs in, checks the allow list and routes; each page has its own module (`chat.js`, `calendar.js`, `trips.js`, `tree.js`, ...). `js/family-data.js` keeps live copies of shared documents. Text lives in `js/strings*.js` (de, en, fr). `sw.js` caches page files only.
-- `functions/` Cloud Functions: `marketUpdate`, `riskSummary`, `weeklyDigest` (timers), `translateMessage`, `cleanupRoom`, `cleanupHousehold` (Firestore triggers). No public endpoints. Keys only in Secret Manager.
-- `firestore.rules` decides who may do what; the page only shows what the rules allow. Households are subcollections under `households/{h}/`.
+- `public/` the website. `js/app.js` signs in, opens the active group and routes; `js/start.js` has mail sign in, the group list and the group wizard; `js/firebase.js` puts every data path under `groups/{active}/` (`js/scope.js`); `js/design.js` applies the group look as CSS variables; each page has its own module (`chat.js`, `calendar.js`, `trips.js`, `tree.js`, ...). `js/family-data.js` keeps live copies of shared documents. Text lives in `js/strings*.js` (de, en, fr). `sw.js` caches page files only.
+- `functions/` Cloud Functions: `marketUpdate`, `riskSummary`, `weeklyDigest` (timers), `translateMessage`, `cleanupRoom`, `cleanupHousehold`, `cleanupGroup` (Firestore triggers), `createGroupCall`, `joinGroupCall`, `setGroupPasswordCall` (callables, `groups.js`). `migrate.js` plus `scripts/migrate-to-groups.mjs`: one time move into the group "Familie". Keys only in Secret Manager.
+- `firestore.rules` decides who may do what; the page only shows what the rules allow. All group data lives under `groups/{g}/` (members in `groups/{g}/members/{uid}`); households are under `groups/{g}/households/{h}/`. Outside the groups: `nicknames`, market data, `marketAccess`, group codes and secrets.
 - `tests/` rules tests (emulator) and Node checks; `functions/test/` function tests with stub APIs.
 - Data flow: browser ↔ Firestore directly; functions write market data, AI texts and translations; the browser never sees a key and never calls Anthropic or NGN.
 
