@@ -11,7 +11,7 @@
 // FIREBASE_AUTH_EMULATOR_HOST set it runs on the local emulators instead;
 // there FAMILY_GROUP_PASSWORD may give the password without asking.
 import { createInterface } from 'node:readline';
-import { initializeApp } from 'firebase-admin/app';
+import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { migrateToGroups } from '../migrate.js';
@@ -39,6 +39,18 @@ async function groupPassword() {
   const second = await askHidden('Repeat the group password: ');
   if (first !== second) throw new Error('The two passwords are not the same.');
   return first;
+}
+
+// Without Google credentials the libraries fail deep inside with a long stack; say it plainly first.
+if (!local) {
+  try {
+    await applicationDefault().getAccessToken();
+  } catch {
+    console.error('No Google credentials on this computer. Install the Google Cloud CLI, run');
+    console.error('  gcloud auth application-default login');
+    console.error('sign in with the owner account, then run this script again.');
+    process.exit(1);
+  }
 }
 
 initializeApp({ projectId: project });
