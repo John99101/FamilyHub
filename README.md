@@ -99,7 +99,8 @@ settings).
   a short daily summary in English and French written by Claude Opus 5.5.
   Describes the past only; no advice.
 - **Einstellungen** (settings): language, light or dark look, simple mode
-  for this device, the watchlist (with market access), the market switches
+  for this device, "Passwort ändern" (mail accounts: sends a link to choose a
+  new password), the watchlist (with market access), the market switches
   (market admins), overview and translation switches (group admins), sign
   out.
 

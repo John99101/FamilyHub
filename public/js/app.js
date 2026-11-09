@@ -30,7 +30,7 @@ import { createQuestionPage } from './question-page.js';
 import { createTree } from './tree.js';
 import { isSimpleMode, SIMPLE_ROUTES } from './simple.js';
 
-export const APP_VERSION = '1.5.0';
+export const APP_VERSION = '1.5.1';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();

@@ -1,7 +1,7 @@
 // Settings: account, language, light or dark look, the watchlist and the
 // market switches (people with market access), and the group's AI switches
 // (group admins). Who is in the group is on the group page.
-import { db, doc, setDoc, serverTimestamp, arrayUnion, arrayRemove } from './firebase.js';
+import { auth, db, doc, setDoc, serverTimestamp, arrayUnion, arrayRemove, sendPasswordResetEmail } from './firebase.js';
 import { $, el, avatar, toast, formatDateTime } from './ui.js';
 import { SYMBOL_PATTERN, WATCHLIST_MAX, findQuote, toDate } from './market-data.js';
 import { t, languageChoice, setLanguageChoice } from './i18n.js';
@@ -52,6 +52,23 @@ export function createSettings(session, { onSignOut, marketData, familyData }) {
   }
 
   $('btn-signout').onclick = onSignOut;
+
+  // Mail and password accounts: a link to choose a new password goes to their own mail
+  // (Google accounts change their password at Google).
+  const passwordButton = $('btn-password');
+  passwordButton.hidden = !session.user.providerData.some((p) => p.providerId === 'password');
+  passwordButton.onclick = async () => {
+    passwordButton.disabled = true;
+    try {
+      await sendPasswordResetEmail(auth, session.user.email);
+      toast(t('settings.passwordMailSent', { mail: session.user.email }));
+    } catch (err) {
+      console.warn('Password mail failed', err.code);
+      toast(t(err.code === 'auth/too-many-requests' ? 'start.err.tooMany' : 'start.err.failed'));
+    } finally {
+      passwordButton.disabled = false;
+    }
+  };
 
   // ---------- watchlist (everyone with market access) ----------
 

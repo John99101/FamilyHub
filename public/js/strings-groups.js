@@ -8,6 +8,8 @@ export const GROUP_STRINGS = {
     'nav.group': 'Gruppe',
     'more.group': 'Code, Seiten, Aussehen, Mitglieder',
     'common.cancel': 'Abbrechen',
+    'settings.changePassword': 'Passwort ändern',
+    'settings.passwordMailSent': 'Wir haben dir eine Mail an {mail} geschickt. Öffne den Link darin, um ein neues Passwort zu wählen.',
 
     'start.or': 'oder mit Mail und Passwort',
     'start.name': 'Dein Name',
@@ -196,6 +198,8 @@ export const GROUP_STRINGS = {
     'nav.group': 'Group',
     'more.group': 'Code, pages, look, members',
     'common.cancel': 'Cancel',
+    'settings.changePassword': 'Change password',
+    'settings.passwordMailSent': 'We sent a mail to {mail}. Open the link in it to choose a new password.',
 
     'start.or': 'or with mail and password',
     'start.name': 'Your name',
@@ -384,6 +388,8 @@ export const GROUP_STRINGS = {
     'nav.group': 'Groupe',
     'more.group': 'Code, pages, apparence, membres',
     'common.cancel': 'Annuler',
+    'settings.changePassword': 'Changer le mot de passe',
+    'settings.passwordMailSent': 'Nous t’avons envoyé un mail à {mail}. Ouvre le lien qu’il contient pour choisir un nouveau mot de passe.',
 
     'start.or': 'ou avec mail et mot de passe',
     'start.name': 'Ton nom',
