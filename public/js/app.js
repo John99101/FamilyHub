@@ -32,7 +32,7 @@ import { createTree } from './tree.js';
 import { isSimpleMode, SIMPLE_ROUTES } from './simple.js';
 import { buildSidebar, setupMorePage } from './nav.js';
 
-export const APP_VERSION = '1.8.1';
+export const APP_VERSION = '1.8.2';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();

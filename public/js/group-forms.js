@@ -121,7 +121,7 @@ function colorPicker(design, key, onChange) {
     oninput: () => { design[key] = picker.value.toLowerCase(); onChange(); },
   });
   const swatches = SWATCHES.map((c) => {
-    const b = el('button', { type: 'button', class: 'swatch', title: c, 'aria-label': c, onclick: () => { design[key] = c; picker.value = c; onChange(); } });
+    const b = el('button', { type: 'button', class: 'look-swatch', title: c, 'aria-label': c, onclick: () => { design[key] = c; picker.value = c; onChange(); } });
     b.style.setProperty('--sw', c);
     return b;
   });

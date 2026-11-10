@@ -2,9 +2,18 @@
 // colors (planColorWork in public/js/colors.js).
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
 import { planColorWork, COLOR_IDS } from '../public/js/colors.js';
 
 const ME = 'u_me';
+
+describe('the color buttons on the Familie page', () => {
+  it('are styled in one CSS file only (a second .swatch rule once made them invisible)', () => {
+    const dir = new URL('../public/css/', import.meta.url);
+    const files = readdirSync(dir).filter((f) => /^\.swatch[ .:{]/m.test(readFileSync(new URL(f, dir), 'utf8')));
+    assert.deepEqual(files, ['house.css']);
+  });
+});
 
 describe('one color per person', () => {
   it('someone without a color takes the first free one', () => {
