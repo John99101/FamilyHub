@@ -12,6 +12,14 @@ describe('why a group call failed', () => {
     assert.equal(groupErrorKey(err('resource-exhausted', 'locked')), 'start.err.locked');
   });
 
+  it('reads the reason when the Firebase library adds the status to it', () => {
+    assert.equal(groupErrorKey(err('unauthenticated', 'signin [401]')), 'start.err.signin');
+    assert.equal(groupErrorKey(err('permission-denied', 'wrong [403]')), 'start.err.wrongCode');
+    assert.equal(groupErrorKey(err('resource-exhausted', 'too-many-groups [429]')), 'start.err.tooManyGroups');
+    assert.equal(groupErrorKey(err('unauthenticated', 'Unauthenticated [401]')), 'start.err.check');
+    assert.equal(groupErrorKey(err('permission-denied', 'permission-denied [403]')), 'start.err.server');
+  });
+
   it('tells a stale sign in from a failed App Check', () => {
     assert.equal(groupErrorKey(err('unauthenticated', 'signin')), 'start.err.signin');
     assert.equal(groupErrorKey(err('unauthenticated', 'Unauthenticated')), 'start.err.check');

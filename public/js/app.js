@@ -32,7 +32,7 @@ import { createTree } from './tree.js';
 import { isSimpleMode, SIMPLE_ROUTES } from './simple.js';
 import { buildSidebar, setupMorePage } from './nav.js';
 
-export const APP_VERSION = '1.8.2';
+export const APP_VERSION = '1.8.3';
 
 // Fill all static text in the chosen language before anything is shown.
 translatePage();
@@ -156,6 +156,8 @@ async function openSession(user) {
   let claims;
   try {
     claims = (await user.getIdTokenResult()).claims;
+    // Right after the mail was confirmed the stored token still says "not confirmed"; the rules need a new one.
+    if (claims.email_verified !== true) claims = (await user.getIdTokenResult(true)).claims;
   } catch (err) {
     console.warn('Token failed', err.code);
     showScreen('signin');
